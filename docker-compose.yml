@@ -1,0 +1,78 @@
+name: capstone
+
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: capstone_web
+    volumes:
+      - ./web:/workspace:rw # 소스코드 폴더
+      - ./media_storage:/${MEDIA_STORAGE_BASE} # 이미지 물리저장소
+    working_dir: /workspace
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgresql
+      - neo4j
+    secrets:
+      - source: gcp_key
+        target: gcp-key.json
+
+    env_file: .env
+    tty: true
+    command: python run.py
+    networks:
+      - capstone-bridge
+
+  postgresql:
+    build:
+      context: ./postgresql
+      dockerfile: Dockerfile
+    container_name: capstone_postgresql
+    ports:
+      - "5432:5432"
+    env_file: .env
+    volumes:
+      - ./postgresql/db_data:/var/lib/postgresql/data # 데이터베이스 물리저장소
+      - ./postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql # 초기화용 sql
+    tty: true
+    networks:
+      - capstone-bridge
+  
+  neo4j:
+    build:
+      context: ./neo4j
+      dockerfile: Dockerfile
+    container_name: capstone_neo4j
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+      - "7473:7473"
+    env_file: .env
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/conf:/conf
+      - ./neo4j/import:/import
+
+  db_monitor:
+    image: adminer
+    restart: always
+    container_name: capstone_adminer
+    depends_on:
+      - postgresql
+    ports:
+      - "8080:8080"
+    expose:
+      - 8080
+    networks:
+      - capstone-bridge
+
+networks:
+  capstone-bridge:
+    driver: bridge
+
+secrets:
+  gcp_key:
+    file: ./gcp-key.json

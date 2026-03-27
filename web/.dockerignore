@@ -1,0 +1,11 @@
+Dockerfile
+.dockerignore
+docker-compose.yml
+.env
+.git
+__pycache__
+*.pyc
+
+media/
+uploads/
+results/
