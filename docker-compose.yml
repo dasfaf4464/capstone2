@@ -13,8 +13,10 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - postgresql
-      - neo4j
+      postgresql:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
     secrets:
       - source: gcp_key
         target: gcp-key.json
@@ -32,6 +34,15 @@ services:
     container_name: capstone_postgresql
     ports:
       - "5432:5432"
+    healthcheck:
+      test: [ 
+        "CMD-SHELL", 
+        "psql -U admin capstone_db -c \"SELECT to_regclass('public.users');\" | grep -q users"
+        ]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
     env_file: .env
     volumes:
       - ./postgresql/db_data:/var/lib/postgresql/data # 데이터베이스 물리저장소
@@ -39,7 +50,7 @@ services:
     tty: true
     networks:
       - capstone-bridge
-  
+
   neo4j:
     build:
       context: ./neo4j
@@ -49,6 +60,12 @@ services:
       - "7687:7687"
       - "7474:7474"
       - "7473:7473"
+    healthcheck:
+      test: [ "CMD-SHELL", "cypher-shell -u neo4j -p capstone123 'RETURN 1'" ]
+      interval: 2s
+      timeout: 30s
+      retries: 30
+      start_period: 5s
     env_file: .env
     volumes:
       - ./neo4j/data:/data
@@ -61,7 +78,8 @@ services:
     restart: always
     container_name: capstone_adminer
     depends_on:
-      - postgresql
+      postgresql:
+        condition: service_healthy
     ports:
       - "8080:8080"
     expose:
