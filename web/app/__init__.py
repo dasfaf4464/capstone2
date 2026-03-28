@@ -22,11 +22,36 @@ def create_app():
     app.config['RESULT_FOLDER'] = os.path.join(media_base, results_dir)
     app.config['SAVE_FOLDER'] = os.path.join(media_base, save_dir) # -> 영구 저장용 새로 만든 폴더
     app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
+    app.config['SECRET_KEY']          = os.getenv('SECRET_KEY', 'dev-secret-key')
 
     # 폴더가 없으면 미리 생성
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['RESULT_FOLDER'], exist_ok=True)
     os.makedirs(app.config['SAVE_FOLDER'], exist_ok=True) # -> 영구 저장용 새로 만든 폴더
+
+    # PostgreSQL 초기화
+    from .storage.core.pg import init_pg, pg_alchemy
+    init_pg(app)
+
+    # Flask-Login, Bcrypt 초기화
+    from flask_login import LoginManager
+    from flask_bcrypt import Bcrypt
+
+    bcrypt       = Bcrypt(app)
+    login_manager = LoginManager(app)
+
+    from .storage.models import User
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(user_id)
+
+    # Neo4j 제약조건 초기화
+    from .storage.core.neo import init_neo4j_constraints
+    try:
+        init_neo4j_constraints()
+    except Exception as e:
+        print(f'[Neo4j] 초기화 실패 (무시): {e}')
 
     # 블루프린트들 불러오기
     from .routes.main import main_bp
