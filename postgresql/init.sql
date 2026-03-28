@@ -14,7 +14,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO flask_server;
 
 -- 회원 정보 테이블
 CREATE TABLE IF NOT EXISTS users (
-    user_nickname VARCHAR(30) NOT NULL,
+    user_nickname VARCHAR(30) NOT NULL UNIQUE,
     user_pw VARCHAR(30) NOT NULL,
     user_email VARCHAR(50) NOT NULL,
     user_uuid uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS images (
 
 -- 사진-태그 매핑 테이블
 CREATE TABLE IF NOT EXISTS image_tag_map (
-    image_uuid INTEGER REFERENCES images(image_uuid) ON DELETE CASCADE,
-    tag_uuid INTEGER REFERENCES image_tags(tag_uuid) ON DELETE CASCADE,
+    image_uuid uuid REFERENCES images(image_uuid) ON DELETE CASCADE,
+    tag_uuid uuid REFERENCES image_tags(tag_uuid) ON DELETE CASCADE,
     
     PRIMARY KEY (image_uuid, tag_uuid)
 );
