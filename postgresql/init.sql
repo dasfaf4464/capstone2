@@ -47,3 +47,9 @@ CREATE TABLE IF NOT EXISTS temp_video (
     video_file_name TEXT UNIQUE NOT NULL
     video_save_time timestampz DEFAULT now()
 );
+
+CREATE TABLE if NOT EXISTS temp_image (
+    image_uuid uuid PRIMARY KEY DEFAULT gen_random_uuid()
+    image_file_name TEXT UNIQUE NOT NULL
+    image_save_time timestampz DEFAULT now()
+);
