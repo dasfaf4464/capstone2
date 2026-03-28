@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_pw VARCHAR(30) NOT NULL,
     user_email VARCHAR(50) NOT NULL,
     user_uuid uuid PRIMARY KEY DEFAULT gen_random_uuid()
+    user_create_time timestampz DEFAULT now()
 );
 
 -- 태그 테이블
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS images (
     image_uuid uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     image_path TEXT NOT NULL,
     image_query TEXT,
+    image_create_time timestampz DEFAULT now()
     user_uuid INTEGER REFERENCES users(user_uuid) ON DELETE CASCADE
 );
 
