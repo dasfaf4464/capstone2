@@ -40,7 +40,8 @@ def create_app():
     bcrypt       = Bcrypt(app)
     login_manager = LoginManager(app)
 
-    from .storage.models import User
+    # 6개 테이블들을 alchemy로 변환한 파일들이 있는 장소
+    from .storage.alchemy_models import User
 
     @login_manager.user_loader
     def load_user(user_id):
