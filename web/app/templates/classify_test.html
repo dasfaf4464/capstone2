@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Gemini 분류 테스트</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; color: #333; padding: 32px; }
+    h1 { font-size: 1.5rem; margin-bottom: 24px; }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .card h2 { font-size: 1rem; margin-bottom: 16px; color: #555; }
+
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #444; }
+    input[type="text"], input[type="file"], textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid #ddd;
+      border-radius: 6px; font-size: 0.95rem; margin-bottom: 14px;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+
+    .preview-area {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+    }
+    .preview-area img {
+      width: 100px; height: 100px; object-fit: cover;
+      border-radius: 6px; border: 1px solid #ddd;
+    }
+
+    button {
+      background: #4a6cf7; color: #fff; border: none;
+      padding: 10px 22px; border-radius: 6px; font-size: 0.95rem;
+      cursor: pointer; font-weight: 600;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+
+    .status { font-size: 0.85rem; margin-top: 10px; color: #777; }
+
+    .result-list { margin-top: 16px; }
+    .result-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 12px; border: 1px solid #eee; border-radius: 8px;
+      margin-bottom: 10px; background: #fafafa;
+    }
+    .result-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+    .result-info { flex: 1; }
+    .result-info .filename { font-size: 0.8rem; color: #999; margin-bottom: 4px; }
+    .result-info .category {
+      display: inline-block; background: #4a6cf7; color: #fff;
+      padding: 2px 10px; border-radius: 12px; font-size: 0.82rem; margin-bottom: 6px;
+    }
+    .result-info .description { font-size: 0.9rem; }
+    .error { color: #e53e3e; font-size: 0.9rem; margin-top: 10px; }
+
+    hr { border: none; border-top: 1px solid #eee; margin: 8px 0 16px; }
+  </style>
+</head>
+<body>
+  <h1>Gemini 분류 테스트</h1>
+
+  <div class="card">
+    <h2>이미지 직접 업로드</h2>
+
+    <label>이미지 선택 (여러 장 가능)</label>
+    <input type="file" id="imageInput" accept="image/*" multiple>
+    <div class="preview-area" id="previewArea"></div>
+
+    <label>대분류 목록 (쉼표로 구분)</label>
+    <input type="text" id="categories" placeholder="예: 스포츠, 풍경, 음식, 동물" value="스포츠, 풍경, 음식, 동물">
+
+    <button id="submitBtn" onclick="submitClassify()">분류 요청</button>
+    <div class="status" id="status"></div>
+    <div class="error" id="errorMsg"></div>
+
+    <div class="result-list" id="results"></div>
+  </div>
+
+  <script>
+    const imageInput = document.getElementById('imageInput');
+    const previewArea = document.getElementById('previewArea');
+    const previewImages = {};
+
+    imageInput.addEventListener('change', () => {
+      previewArea.innerHTML = '';
+      Object.keys(previewImages).forEach(k => delete previewImages[k]);
+      Array.from(imageInput.files).forEach(file => {
+        const url = URL.createObjectURL(file);
+        previewImages[file.name] = url;
+        const img = document.createElement('img');
+        img.src = url;
+        img.title = file.name;
+        previewArea.appendChild(img);
+      });
+    });
+
+    async function submitClassify() {
+      const btn = document.getElementById('submitBtn');
+      const status = document.getElementById('status');
+      const errorMsg = document.getElementById('errorMsg');
+      const resultsDiv = document.getElementById('results');
+
+      errorMsg.textContent = '';
+      resultsDiv.innerHTML = '';
+
+      const files = imageInput.files;
+      if (!files.length) { errorMsg.textContent = '이미지를 선택해주세요.'; return; }
+
+      const rawCats = document.getElementById('categories').value;
+      const categories = rawCats.split(',').map(s => s.trim()).filter(Boolean);
+      if (!categories.length) { errorMsg.textContent = '대분류를 입력해주세요.'; return; }
+
+      const formData = new FormData();
+      Array.from(files).forEach(f => formData.append('images', f));
+      formData.append('categories', JSON.stringify(categories));
+
+      btn.disabled = true;
+      status.textContent = 'Gemini에 요청 중...';
+
+      try {
+        const res = await fetch('/api/classify/images', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) { errorMsg.textContent = data.error || '오류가 발생했습니다.'; return; }
+
+        status.textContent = `완료 — ${data.count}개 이미지 분류됨`;
+        data.results.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'result-item';
+
+          const previewSrc = previewImages[item.filename] || '';
+          div.innerHTML = `
+            ${previewSrc ? `<img src="${previewSrc}" alt="${item.filename}">` : ''}
+            <div class="result-info">
+              <div class="filename">${item.filename}</div>
+              <div class="category">${item.category}</div>
+              <div class="description">${item.description}</div>
+            </div>`;
+          resultsDiv.appendChild(div);
+        });
+      } catch (e) {
+        errorMsg.textContent = '네트워크 오류: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

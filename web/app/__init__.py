@@ -33,6 +33,7 @@ def create_app():
     from .routes.auth import auth_bp
     from .routes.video import video_bp, analysis_bp
     from .routes.archive import archive_bp
+    from .routes.classify import classify_bp
 
     # 메인 앱에 블루프린트 등록
     app.register_blueprint(main_bp)
@@ -40,5 +41,6 @@ def create_app():
     app.register_blueprint(video_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(archive_bp)
+    app.register_blueprint(classify_bp)
 
     return app
