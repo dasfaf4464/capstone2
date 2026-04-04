@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>로그인 - YOLO 팀</title>
+</head>
+<body>
+    <div>
+        <h1>프로그램 로고</h1>
+    </div>
+
+    <hr>
+
+    <div>
+        <h2>로그인</h2>
+        <form id="loginForm">
+            <div>
+                <label>이메일</label><br>
+                <input type="text" id="email" placeholder="이메일을 입력하세요" required>
+            </div>
+            <br>
+            <div>
+                <label>비밀번호</label><br>
+                <input type="password" id="password" placeholder="비밀번호를 입력하세요" required>
+            </div>
+            <br>
+            <div>
+                <input type="checkbox" id="rememberMe">
+                <label for="rememberMe">로그인 정보 기억하기</label>
+            </div>
+            <br>
+            <button type="submit">로그인</button>
+            <button type="button">Google로 로그인</button>
+        </form>
+        <br>
+        <a href="auth.html">계정이 아직 없으신가요? 회원가입하기</a>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('로그인 성공!');
+                    location.href = 'dashboard.html';
+                } else {
+                    alert('로그인 실패: ' + (result.message || '이메일 또는 비밀번호를 확인하세요.'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('서버 연결에 실패했습니다.');
+            }
+        });
+    </script>
+</body>
+</html>

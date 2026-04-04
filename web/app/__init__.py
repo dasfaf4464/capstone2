@@ -4,9 +4,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask
+from flask_cors import CORS
 
 def create_app():
     app = Flask(__name__)
+    CORS(app)
 
     # 수정: 현재 파일(__init__.py)의 위치를 기준으로 절대 경로를 엶
     # 파일을 저장할 수 있도록 폴더를 세팅
