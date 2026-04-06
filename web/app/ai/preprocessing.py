@@ -64,7 +64,7 @@ def extract_frames_ffmpeg(
     if duration <= 0:
         raise RuntimeError("영상 duration을 읽을 수 없습니다.")
 
-    timestamps = np.linspace(0, duration, max_frames, endpoint=False).tolist()
+    timestamps = _build_timestamps(video_path, duration, max_frames)
 
     w, h = size
     frames = []
@@ -119,6 +119,62 @@ def preprocess_frame_bgr(
 # ---------------------------------------------------------------------------
 # 내부 헬퍼
 # ---------------------------------------------------------------------------
+
+def _detect_scene_changes(video_path: str, threshold: float = 0.3) -> list[float]:
+    """
+    ffmpeg select 필터로 장면 전환 타임스탬프 목록 반환.
+    threshold: 0.0~1.0, 높을수록 큰 변화만 감지
+    """
+    try:
+        out, _ = (
+            ffmpeg
+            .input(video_path)
+            .video
+            .filter('select', f'gt(scene,{threshold})')
+            .filter('showinfo')
+            .output('pipe:', format='null', vsync='vfr')
+            .run(capture_stdout=True, capture_stderr=True, quiet=True)
+        )
+        # showinfo 출력에서 pts_time 파싱
+        import re
+        stderr_text = _.decode('utf-8', errors='ignore')
+        timestamps = [
+            float(m.group(1))
+            for m in re.finditer(r'pts_time:([\d.]+)', stderr_text)
+        ]
+        return sorted(timestamps)
+    except Exception:
+        return []
+
+
+def _build_timestamps(video_path: str, duration: float, max_frames: int) -> list[float]:
+    """
+    장면 전환 타임스탬프 + 균등 보완으로 max_frames 개 타임스탬프 구성.
+    장면 전환 감지 실패 시 균등 분포로 폴백.
+    """
+    scene_ts = _detect_scene_changes(video_path)
+
+    if not scene_ts:
+        # 폴백: 균등 분포
+        return np.linspace(0, duration, max_frames, endpoint=False).tolist()
+
+    # 장면 전환이 max_frames 초과 시 균등 다운샘플
+    if len(scene_ts) >= max_frames:
+        indices = np.linspace(0, len(scene_ts) - 1, max_frames, dtype=int)
+        return [scene_ts[i] for i in indices]
+
+    # 부족분을 균등 분포로 보충
+    n_fill = max_frames - len(scene_ts)
+    fill_ts = np.linspace(0, duration, n_fill + 2, endpoint=True).tolist()[1:-1]
+
+    scene_set = set(round(t, 3) for t in scene_ts)
+    merged = list(scene_ts)
+    for t in fill_ts:
+        if round(t, 3) not in scene_set:
+            merged.append(t)
+
+    merged.sort()
+    return merged[:max_frames]
 
 def _build_filter_chain(stream, w: int, h: int, denoise: bool, normalize: bool):
     """ffmpeg 필터 체인 구성."""

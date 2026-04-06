@@ -6,8 +6,10 @@ vision_test/app.py 의 _run_job 로직 이식
 import os
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import cv2
 import numpy as np
+from pathlib import Path
 
 from .embeddings import (
     extract_frames, load_model,
@@ -49,6 +51,17 @@ def run_job(job_id: str, query: str, max_frames: int, result_folder: str):
     thread.start()
 
 
+def _schedule_cleanup(job_id: str, result_folder: str, delay: int = 3600):
+    """완료/오류 후 delay초 뒤 job 메모리 + top5 파일 자동 삭제."""
+    def _cleanup():
+        job = _jobs.pop(job_id, None)
+        if job:
+            for r in job.get('results', []):
+                fpath = Path(result_folder) / r['filename']
+                fpath.unlink(missing_ok=True)
+    threading.Timer(delay, _cleanup).start()
+
+
 def _execute(job_id: str, video_path: str, query: str,
              max_frames: int, result_folder: str):
     try:
@@ -63,20 +76,31 @@ def _execute(job_id: str, video_path: str, query: str,
         model    = load_model()
         text_vec = get_text_embedding(model, query)
 
-        results = []
-        for i, (frame_idx, ts, frame_bgr) in enumerate(frames):
-            _jobs[job_id]['message']  = f'프레임 임베딩 중... ({i+1}/{len(frames)})'
-            _jobs[job_id]['progress'] = i + 1
+        # Vertex AI rate limit: 동시 요청 최대 3개로 제한
+        _RATE_SEMAPHORE = threading.Semaphore(3)
 
-            img_vec = get_image_embedding(model, frame_bgr)
-            score   = cosine_similarity(text_vec, img_vec)
-            results.append({
+        def _embed_frame(item):
+            i, frame_idx, ts, frame_bgr = item
+            with _RATE_SEMAPHORE:
+                img_vec = get_image_embedding(model, frame_bgr)
+            score = cosine_similarity(text_vec, img_vec)
+            _jobs[job_id]['progress'] = _jobs[job_id]['progress'] + 1
+            _jobs[job_id]['message'] = (
+                f'프레임 임베딩 중... ({_jobs[job_id]["progress"]}/{len(frames)})'
+            )
+            return {
                 'frame_idx': frame_idx,
                 'timestamp': ts,
                 'score':     score,
                 'frame_bgr': frame_bgr,
-            })
-            time.sleep(0.5)  # Vertex AI rate limit 방지
+            }
+
+        indexed = [(i, fi, ts, bgr) for i, (fi, ts, bgr) in enumerate(frames)]
+        results = []
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(_embed_frame, item): item for item in indexed}
+            for future in as_completed(futures):
+                results.append(future.result())
 
         results.sort(key=lambda x: x['score'], reverse=True)
 
@@ -103,7 +127,9 @@ def _execute(job_id: str, video_path: str, query: str,
         _jobs[job_id]['status']  = 3  # 3: 완료
         _jobs[job_id]['results'] = top5
         _jobs[job_id]['message'] = '완료'
+        _schedule_cleanup(job_id, result_folder)
 
     except Exception as e:
         _jobs[job_id]['status']  = -1  # -1: 오류
         _jobs[job_id]['message'] = str(e)
+        _schedule_cleanup(job_id, result_folder)
