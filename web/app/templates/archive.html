@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>아카이브 - YOLO 팀</title>
+</head>
+<body>
+    <nav>
+        <h3>프로그램 로고</h3>
+        <ul>
+            <li><a href="dashboard.html">대시보드</a></li>
+            <li><a href="analysis.html">분석</a></li>
+            <li><a href="archive.html">아카이브</a></li>
+            <li><a href="#">휴지통</a></li>
+            <li><a href="#">설정</a></li>
+        </ul>
+    </nav>
+
+    <hr>
+
+    <div>
+        <div>
+            <span>알림(5)</span> | <span>프로필 이미지</span>
+        </div>
+
+        <form action="/search" method="GET">
+            <input type="text" name="keyword" placeholder="검색어를 입력하세요">
+            <button type="submit">검색</button>
+        </form>
+
+        <br>
+
+        <div>
+            <span>'5' 개의 결과 (ex3.mp4 분석 결과)</span>
+            <button type="button">Filter</button>
+            <select>
+                <option>영상별</option>
+                <option>날짜별</option>
+            </select>
+        </div>
+
+        <br>
+
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            
+            <div style="border: 1px solid black; padding: 10px; width: 180px;">
+                <div style="width: 100%; height: 120px; background-color: #ccc; display: flex; align-items: center; justify-content: center;">샷 #1</div>
+                <p small>
+                    - Source: ex3.mp4<br>
+                    - Timestamp: 00:01:23<br>
+                    - <a href="#">이미지 링크</a>
+                </p>
+            </div>
+
+            <div style="border: 1px solid black; padding: 10px; width: 180px;">
+                <div style="width: 100%; height: 120px; background-color: #ccc; display: flex; align-items: center; justify-content: center;">샷 #2</div>
+                <p>
+                    - Source: ex3.mp4<br>
+                    - Timestamp: 00:02:45<br>
+                    - <a href="#">이미지 링크</a>
+                </p>
+            </div>
+
+            <div style="border: 1px solid black; padding: 10px; width: 180px;">
+                <div style="width: 100%; height: 120px; background-color: #ccc; display: flex; align-items: center; justify-content: center;">샷 #3</div>
+                <p>
+                    - Source: ex3.mp4<br>
+                    - Timestamp: 00:05:12<br>
+                    - <a href="#">이미지 링크</a>
+                </p>
+            </div>
+
+            <div style="border: 1px solid black; padding: 10px; width: 180px;">
+                <div style="width: 100%; height: 120px; background-color: #ccc; display: flex; align-items: center; justify-content: center;">샷 #4</div>
+                <p>
+                    - Source: ex3.mp4<br>
+                    - Timestamp: 00:08:30<br>
+                    - <a href="#">이미지 링크</a>
+                </p>
+            </div>
+
+            <div style="border: 1px solid black; padding: 10px; width: 180px;">
+                <div style="width: 100%; height: 120px; background-color: #ccc; display: flex; align-items: center; justify-content: center;">샷 #5</div>
+                <p>
+                    - Source: ex3.mp4<br>
+                    - Timestamp: 00:10:15<br>
+                    - <a href="#">이미지 링크</a>
+                </p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
