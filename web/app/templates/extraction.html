@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동영상 추출</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            width: 100vw;
+            height: 100vh;
+            background-color: #f4f4f9;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .box {
+            background-color: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            font-weight: bold;
+        }
+
+        header.box {
+            padding: 15px;
+            font-size: 1.2rem;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        nav div {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #333;
+            background-color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .btn:hover { background-color: #eee; }
+
+        .middle-section {
+            display: flex;
+            flex: 2;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .video-box {
+            flex: 7;
+            flex-direction: column;
+        }
+
+        .prompt-section {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .prompt-box {
+            flex: 1;
+            align-items: flex-start;
+            justify-content: flex-start;
+            width: 100%;
+            resize: none;
+            padding: 15px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .submit-btn:hover { background-color: #555; }
+
+        .photo-output-box {
+            flex: 1;
+            width: 100%;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="box">
+        동영상 추출
+    </header>
+
+    <nav>
+        <div>
+            <button class="btn" onclick="location.href='archive.html'">아카이브로 이동</button>
+        </div>
+        <div>
+            <button class="btn">로그인 버튼</button>
+            <button class="btn">회원가입 버튼</button>
+        </div>
+    </nav>
+
+    <div class="middle-section">
+        <div class="box video-box" id="drop-zone">
+            <div id="upload-message">
+                이곳에 동영상을 드래그하거나<br>
+                클릭하여 파일을 선택하세요
+            </div>
+            
+            <input type="file" id="file-input" accept="video/*" style="display: none;">
+            
+            <div id="file-name" style="margin-top: 15px; color: #007bff; font-weight: bold;"></div>
+        </div>
+
+        <div class="prompt-section">
+            <textarea class="box prompt-box" placeholder="출력 프롬프트 입력"></textarea>
+            <button class="submit-btn">출력 버튼</button>
+        </div>
+    </div>
+
+    <div class="box photo-output-box">
+        사진 출력
+    </div>
+
+    <script src="/static/extraction.js"></script>
+    <script src="{{ url_for('static', filename='extraction.js') }}"></script>
+
+</body>
+</html>
