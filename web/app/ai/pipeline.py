@@ -19,22 +19,29 @@ from .embeddings import (
 # 분석 job 상태 저장 (in-memory)
 # status: 0:대기, 1:전처리, 2:AI분석중, 3:완료
 _jobs: dict = {}
+_jobs_lock = threading.Lock()
+
+# Vertex AI rate limit: 전체 job에 걸쳐 동시 요청 최대 3개로 제한
+_RATE_SEMAPHORE = threading.Semaphore(3)
 
 
 def get_job(job_id: str) -> dict | None:
-    return _jobs.get(job_id)
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        return dict(job) if job else None  # 복사본 반환으로 외부 변경 방지
 
 
 def register_job(job_id: str, video_path: str):
     """upload 시점에 job 등록."""
-    _jobs[job_id] = {
-        'status':     0,  # 0: 대기
-        'message':    '업로드 완료, 분석 대기 중',
-        'progress':   0,
-        'total':      0,
-        'results':    [],
-        'video_path': video_path,
-    }
+    with _jobs_lock:
+        _jobs[job_id] = {
+            'status':     0,  # 0: 대기
+            'message':    '업로드 완료, 분석 대기 중',
+            'progress':   0,
+            'total':      0,
+            'results':    [],
+            'video_path': video_path,
+        }
 
 
 def run_job(job_id: str, query: str, max_frames: int, result_folder: str):
@@ -54,7 +61,8 @@ def run_job(job_id: str, query: str, max_frames: int, result_folder: str):
 def _schedule_cleanup(job_id: str, result_folder: str, delay: int = 3600):
     """완료/오류 후 delay초 뒤 job 메모리 + top5 파일 자동 삭제."""
     def _cleanup():
-        job = _jobs.pop(job_id, None)
+        with _jobs_lock:
+            job = _jobs.pop(job_id, None)
         if job:
             for r in job.get('results', []):
                 fpath = Path(result_folder) / r['filename']
@@ -64,30 +72,29 @@ def _schedule_cleanup(job_id: str, result_folder: str, delay: int = 3600):
 
 def _execute(job_id: str, video_path: str, query: str,
              max_frames: int, result_folder: str):
+    def _update_job(**kwargs):
+        with _jobs_lock:
+            _jobs[job_id].update(kwargs)
+
     try:
-        _jobs[job_id]['status']  = 1  # 1: 전처리
-        _jobs[job_id]['message'] = '프레임 추출 중...'
+        _update_job(status=1, message='프레임 추출 중...')  # 1: 전처리
 
         frames = extract_frames(video_path, max_frames=max_frames)
-        _jobs[job_id]['total'] = len(frames)
+        _update_job(total=len(frames))
 
-        _jobs[job_id]['status']  = 2  # 2: AI 분석 중
-        _jobs[job_id]['message'] = '텍스트 임베딩 중...'
+        _update_job(status=2, message='텍스트 임베딩 중...')  # 2: AI 분석 중
         model    = load_model()
         text_vec = get_text_embedding(model, query)
 
-        # Vertex AI rate limit: 동시 요청 최대 3개로 제한
-        _RATE_SEMAPHORE = threading.Semaphore(3)
-
         def _embed_frame(item):
             i, frame_idx, ts, frame_bgr = item
-            with _RATE_SEMAPHORE:
+            with _RATE_SEMAPHORE:  # 모듈 레벨 세마포어 — 전체 job에 걸쳐 동시 3개 제한
                 img_vec = get_image_embedding(model, frame_bgr)
             score = cosine_similarity(text_vec, img_vec)
-            _jobs[job_id]['progress'] = _jobs[job_id]['progress'] + 1
-            _jobs[job_id]['message'] = (
-                f'프레임 임베딩 중... ({_jobs[job_id]["progress"]}/{len(frames)})'
-            )
+            with _jobs_lock:
+                _jobs[job_id]['progress'] += 1
+                progress = _jobs[job_id]['progress']
+            _update_job(message=f'프레임 임베딩 중... ({progress}/{len(frames)})')
             return {
                 'frame_idx': frame_idx,
                 'timestamp': ts,
@@ -121,15 +128,11 @@ def _execute(job_id: str, video_path: str, query: str,
                 'score':      round(r['score'], 4),
                 'norm_score': round(norm, 4),
                 'filename':   fname,
-                # TODO: DB images 테이블에 image_path, image_query 저장
             })
 
-        _jobs[job_id]['status']  = 3  # 3: 완료
-        _jobs[job_id]['results'] = top5
-        _jobs[job_id]['message'] = '완료'
+        _update_job(status=3, results=top5, message='완료')  # 3: 완료
         _schedule_cleanup(job_id, result_folder)
 
     except Exception as e:
-        _jobs[job_id]['status']  = -1  # -1: 오류
-        _jobs[job_id]['message'] = str(e)
+        _update_job(status=-1, message=str(e))  # -1: 오류
         _schedule_cleanup(job_id, result_folder)
