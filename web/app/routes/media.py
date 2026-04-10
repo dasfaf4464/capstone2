@@ -14,7 +14,7 @@ media_bp = Blueprint('media', __name__, url_prefix='/media')
 
 @media_bp.route('/images/<filename>')
 def serve_image(filename):
-    return send_from_directory(current_app.config['IMAGES_FOLDER'], filename)
+    return send_from_directory(current_app.config['SAVE_FOLDER'], filename)
 
 
 @media_bp.route('/frames/<filename>')

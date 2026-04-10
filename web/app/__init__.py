@@ -21,7 +21,6 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = os.path.join(media_base, uploads_dir)
     app.config['RESULT_FOLDER'] = os.path.join(media_base, results_dir)
     app.config['SAVE_FOLDER'] = os.path.join(media_base, save_dir)
-    app.config['IMAGES_FOLDER'] = app.config['SAVE_FOLDER']
     app.config['TEMP_FOLDER'] = os.path.join(media_base, temp_dir)
     app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
 
