@@ -1,90 +1,119 @@
-from flask import Blueprint, request, jsonify, current_app
+"""
+[ video 라우터 ]
+영상 업로드 / 분석 요청 / 상태 조회 API 담당함
+AI 파이프라인은 ai/pipeline.py 에서 백그라운드 스레드로 돌아감
+
+- POST /api/video/upload          → 영상 업로드
+- GET  /api/video/status/<uuid>   → 분석 진행 상태 조회
+- POST /api/video/request         → AI 분석 요청
+"""
+
+from flask import Blueprint, request, jsonify, current_app, session
 import os
 import uuid
 from werkzeug.utils import secure_filename
-from sqlalchemy import text
-from ..storage.core.pg import pg_alchemy as db
-from ..ai.pipeline import register_job, run_job # AI 파이프라인 함수들
+from ..storage.alchemy_models.temp_video import save_temp_video
+from ..ai.pipeline import register_job, run_job, get_job
 
-# '/api/video'로 시작하는 요청을 처리
 video_bp = Blueprint('video', __name__, url_prefix='/api/video')
 
-# 영상 업로드 API (/api/video/upload)
+
 @video_bp.route('/upload', methods=['POST'])
 def upload_video():
-    # 프론트엔드에서 보낸 폼 데이터 중 'video_file'이라는 이름의 파일을 가져옴
+    # 로그인 확인
+    if 'user_uuid' not in session:
+        return jsonify({"result": "fail", "msg": "로그인이 필요한 서비스입니다."}), 401
+
+    # form-data 에서 video_file 키로 파일 꺼냄
     video_file = request.files.get('video_file')
-    
-    # 파일이 정상적으로 올라오지 않았다면 에러를 반환
     if not video_file or video_file.filename == '':
         return jsonify({"result": "fail", "msg": "영상 파일이 없습니다."}), 400
 
-    # 해킹 방지를 위해 파일명을 안전하게 바꾸고(secure_filename), 확장자(.mp4 등)만 분리
+    # 파일명 보안 처리 후 uuid 기반으로 새 파일명 생성 (충돌 방지)
     ext = os.path.splitext(secure_filename(video_file.filename))[1]
-    
-    # 영상마다 절대 안 겹치는 고유한 랜덤 ID(uuid)를 만듦
     video_uuid = str(uuid.uuid4())
-    
-    # 저장할 파일 이름을 "랜덤ID.확장자" 형태로 만듦
     filename = f"{video_uuid}{ext}"
 
-    # 환경 설정(__init__.py)에 정의된 업로드 폴더 경로를 가져옴
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    
-    # 실제 파일이 저장될 전체 경로를 조합 (예: /media/uploads/1234-abcd.mp4)
+    # TEMP_FOLDER 에 저장 (분석 완료 전 임시 보관용)
+    upload_folder = current_app.config.get('TEMP_FOLDER', current_app.config['UPLOAD_FOLDER'])
     video_path = os.path.join(upload_folder, filename)
-    
-    # 서버의 물리적인 하드디스크(도커 볼륨)에 파일을 저장
     video_file.save(video_path)
 
     try:
-        # 업로드된 영상 정보를 DB의 temp_video 테이블에 기록
-        query = text("""
-            INSERT INTO temp_video (video_uuid, video_file_name) 
-            VALUES (:video_uuid, :video_file_name)
-        """)
-        db.session.execute(query, {"video_uuid": video_uuid, "video_file_name": filename})
-        db.session.commit()
+        user_uuid = session.get('user_uuid')
+
+        # DB에 임시 영상 기록 저장
+        save_temp_video(video_path=video_path, user_uuid=user_uuid)
+
+        # 분석 job 등록 (메모리에 올려둠 → 이후 request API 에서 찾아씀)
+        register_job(video_uuid, video_path)
+
+        return jsonify({
+            "result": "success",
+            "msg": "업로드 완료",
+            "video_data": {
+                "video_uuid": video_uuid,
+                "video_name": filename
+            }
+        }), 202
+
     except Exception as e:
-        db.session.rollback()
         return jsonify({"result": "fail", "msg": "DB 저장 실패", "details": str(e)}), 500
 
-    # 백그라운드에서 AI 분석을 대기시키기 위해 파이프라인에 작업을 등록
-    register_job(video_uuid, video_path)
 
-    # 처리가 다 끝났으면 성공 메시지와 영상 ID를 반환
-    return jsonify({"result": "success", "msg": "업로드 완료", "video_uuid": video_uuid}), 202
+@video_bp.route('/status/<video_uuid>', methods=['GET'])
+def get_status(video_uuid):
+    # 메모리에서 job 상태 조회
+    # status 값 의미: 0=대기, 1=전처리중, 2=AI분석중, 3=완료, -1=오류
+    job = get_job(video_uuid)
+    if not job:
+        return jsonify({"result": "fail", "msg": "존재하지 않는 video_uuid입니다."}), 404
+
+    return jsonify({
+        "result":   "success",
+        "video_uuid": video_uuid,
+        "status":   job['status'],
+        "message":  job['message'],
+        "progress": job['progress'],  # 현재까지 처리된 프레임 수
+        "total":    job['total'],     # 전체 프레임 수
+        "results":  job.get('results', []),  # 분석 완료 시 top5 프레임 목록
+    }), 200
 
 
-# 영상처리(AI 분석) 요청 API (/api/video/request)
 @video_bp.route('/request', methods=['POST'])
 def request_analysis():
-    # 업로드 시 발급받았던 video_uuid를 프론트에서 보내주면 그걸 받음
+    # 로그인 확인
+    if 'user_uuid' not in session:
+        return jsonify({"result": "fail", "msg": "로그인이 필요한 서비스입니다."}), 401
+
+    # 요청 body 에서 video_uuid, query 꺼냄
     data = request.json or {}
     video_uuid = data.get('video_uuid')
-
-    # [프론트엔드 팀 수정 대비] 
-    # 나중에 프론트에서 검색어(예: "빨간 모자 쓴 사람")를 입력받아 보내주기로 했다면 주석 해제
-    # query_text = data.get('query')
+    query_text = data.get('query', '자동 분석')
 
     if not video_uuid:
         return jsonify({"result": "fail", "msg": "video_uuid가 필요합니다."}), 400
 
-    # 분석 결과(이미지들)가 저장될 경로를 가져옴
     result_folder = current_app.config['RESULT_FOLDER']
 
-        # [AI 팀 수정 대비]
-        # 1. AI 팀이 pipeline.py의 run_job() 파라미터 개수나 종류를 바꿨다면 여기를 똑같이 맞춰줘야 에러가 안 남
-        # 2. 현재는 API 명세서에 검색어(query) 파라미터가 없어서 "자동 분석"을 강제로 넣어 에러를 방지
-        #    프론트에서 검색어를 받게 되면 "자동 분석"을 지우고 query_text 변수로 교체
     try:
-        # ai/pipeline.py 에 있는 실제 영상 분석 동작(run_job)을 실행
+        # 백그라운드 스레드로 AI 분석 파이프라인 실행
+        # 분석 결과는 /status/<video_uuid> 로 폴링해서 확인해야 함
         run_job(
             job_id=video_uuid,
-            query="자동 분석", # 추후 프론트에서 검색어를 받게 되면 이 부분을 변수로 바꾸면 됨
-            max_frames=50,   # 최대 몇 프레임을 추출할지 결정
-            result_folder=result_folder,
+            query=query_text,
+            max_frames=50,
+            result_folder=result_folder
         )
-        return jsonify({"result": "success", "msg": "AI 영상 분석 요청 완료"}), 202
+
+        return jsonify({
+            "result": "success",
+            "msg": "AI 영상 분석 요청 완료",
+            "request_data": {
+                "video_uuid": video_uuid,
+                "query": query_text
+            }
+        }), 202
+
     except Exception as e:
         return jsonify({"result": "fail", "msg": "분석 요청 실패", "details": str(e)}), 500
