@@ -13,8 +13,5 @@ psycopg2-binary
 python-dotenv==1.2.2
 
 # --- AI --- #
-google-cloud-aiplatform[vision]
-
-# --- Image Processing --- #
-opencv-python-headless
-ffmpeg-python
+google-generativeai
+Pillow

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 아카이브</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="title">내 여행</span>
+</div>
+
+<div class="content">
+  <div id="travel_list"></div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/archive" class="nav-item active">
+    <span class="icon">🗂️</span>아카이브
+  </a>
+  <a href="/search" class="nav-item">
+    <span class="icon">🔍</span>검색
+  </a>
+  <a href="/upload" class="nav-plus">＋</a>
+  <a href="/analysis" class="nav-item">
+    <span class="icon">📊</span>성향분석
+  </a>
+  <a href="/home" class="nav-item">
+    <span class="icon">🏠</span>홈
+  </a>
+</nav>
+
+<script>
+async function loadTravels() {
+  const res  = await fetch('/api/travel/list');
+  const data = await res.json();
+  const el   = document.getElementById('travel_list');
+
+  if (!data.travels || data.travels.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="icon">✈️</div><p>아직 여행이 없습니다.<br>사진을 업로드해서 첫 여행을 기록해보세요!</p></div>`;
+    return;
+  }
+
+  el.innerHTML = data.travels.map(t => `
+    <a href="/travel/${t.travel_uuid}" class="travel-card">
+      <img class="travel-thumb"
+           src="${t.cover_photo_path ? '/media/images/' + t.cover_photo_path.split('/').pop() : ''}"
+           onerror="this.style.background='#e8eaf6'"
+           alt="">
+      <div class="travel-info">
+        <div class="name">${t.travel_name}</div>
+        <div class="date">${t.start_date} ~ ${t.end_date}</div>
+      </div>
+    </a>
+  `).join('');
+}
+
+loadTravels();
+</script>
+</body>
+</html>

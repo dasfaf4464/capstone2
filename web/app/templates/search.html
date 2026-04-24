@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 검색</title>
+<link rel="stylesheet" href="/static/common.css">
+<style>
+  .search-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+  .search-bar input { flex: 1; }
+  .search-bar button { flex-shrink: 0; padding: 12px 18px; background: #4f8ef7; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .result-count { font-size: 13px; color: #888; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="title">태그 검색</span>
+</div>
+
+<div class="content">
+  <div class="search-bar">
+    <input class="input-field" type="text" id="keyword" placeholder="키워드 입력 (예: 바다, 라멘)">
+    <button onclick="search()">검색</button>
+  </div>
+
+  <div id="result_count" class="result-count" style="display:none"></div>
+  <div class="photo-grid" id="result_grid"></div>
+</div>
+
+<!-- 사진 상세 모달 -->
+<div class="modal" id="modal" onclick="closeModal()">
+  <span class="modal-close">✕</span>
+  <img id="modal_img" src="" alt="">
+  <div class="modal-tags" style="margin-top:16px;text-align:center">
+    <div style="color:#7ecfff;font-size:14px;font-weight:700" id="modal_cat"></div>
+    <div style="margin-top:8px" id="modal_keywords"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/archive" class="nav-item">
+    <span class="icon">🗂️</span>아카이브
+  </a>
+  <a href="/search" class="nav-item active">
+    <span class="icon">🔍</span>검색
+  </a>
+  <a href="/upload" class="nav-plus">＋</a>
+  <a href="/analysis" class="nav-item">
+    <span class="icon">📊</span>성향분석
+  </a>
+  <a href="/home" class="nav-item">
+    <span class="icon">🏠</span>홈
+  </a>
+</nav>
+
+<script>
+async function search() {
+  const keyword = document.getElementById('keyword').value.trim();
+  if (!keyword) return;
+
+  const res  = await fetch(`/api/photo/search?keyword=${encodeURIComponent(keyword)}`);
+  const data = await res.json();
+  const photos = data.photos || [];
+
+  document.getElementById('result_count').style.display = 'block';
+  document.getElementById('result_count').textContent = `"${keyword}" 검색 결과 ${photos.length}장`;
+
+  const grid = document.getElementById('result_grid');
+  if (photos.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">🔍</div><p>검색 결과가 없습니다.</p></div>`;
+    return;
+  }
+  grid.innerHTML = photos.map(p => `
+    <div class="photo-cell" onclick="openModal('${p.photo_path}', '${p.main_category || ''}', ${JSON.stringify(p.sub_categories || [])})">
+      <img src="/media/images/${p.photo_path.split('/').pop()}" alt="">
+      ${p.main_category ? `<div class="badge">${p.main_category}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function openModal(path, category, tags) {
+  document.getElementById('modal_img').src = '/media/images/' + path.split('/').pop();
+  document.getElementById('modal_cat').textContent = category;
+  document.getElementById('modal_keywords').innerHTML = tags.map(t => `<span class="tag">#${t}</span>`).join('');
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+document.getElementById('keyword').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>

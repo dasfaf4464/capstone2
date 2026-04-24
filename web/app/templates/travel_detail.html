@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 여행 사진</title>
+<link rel="stylesheet" href="/static/common.css">
+<style>
+  .photo-info { padding: 10px 0 4px; }
+  .photo-info .cat { font-size: 12px; color: #4f8ef7; font-weight: 600; }
+  .photo-info .tags { font-size: 11px; color: #888; margin-top: 2px; }
+
+  /* 사진 상세 모달 */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; justify-content: center; align-items: center; flex-direction: column; }
+  .modal.show { display: flex; }
+  .modal img { max-width: 90%; max-height: 60vh; border-radius: 12px; object-fit: contain; }
+  .modal .modal-tags { margin-top: 16px; text-align: center; }
+  .modal .modal-cat { color: #7ecfff; font-size: 14px; font-weight: 700; }
+  .modal .modal-keywords { margin-top: 8px; }
+  .modal .modal-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 28px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="back" onclick="history.back()">←</span>
+  <span class="title" id="travel_title">여행 사진</span>
+</div>
+
+<div class="content">
+  <!-- 카테고리 필터 -->
+  <div class="filter-tabs" id="filter_tabs">
+    <div class="filter-tab active" onclick="filterPhotos('전체', this)">전체</div>
+    <div class="filter-tab" onclick="filterPhotos('풍경/장소', this)">풍경/장소</div>
+    <div class="filter-tab" onclick="filterPhotos('음식', this)">음식</div>
+    <div class="filter-tab" onclick="filterPhotos('기록', this)">기록</div>
+  </div>
+
+  <div class="photo-grid" id="photo_grid"></div>
+</div>
+
+<!-- 사진 상세 모달 -->
+<div class="modal" id="modal" onclick="closeModal()">
+  <span class="modal-close">✕</span>
+  <img id="modal_img" src="" alt="">
+  <div class="modal-tags">
+    <div class="modal-cat" id="modal_cat"></div>
+    <div class="modal-keywords" id="modal_keywords"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/archive" class="nav-item active">
+    <span class="icon">🗂️</span>아카이브
+  </a>
+  <a href="/search" class="nav-item">
+    <span class="icon">🔍</span>검색
+  </a>
+  <a href="/upload" class="nav-plus">＋</a>
+  <a href="/analysis" class="nav-item">
+    <span class="icon">📊</span>성향분석
+  </a>
+  <a href="/home" class="nav-item">
+    <span class="icon">🏠</span>홈
+  </a>
+</nav>
+
+<script>
+const travelUuid = '{{ travel_uuid }}';
+let allPhotos = [];
+
+async function loadPhotos() {
+  const res  = await fetch(`/api/travel/${travelUuid}/photos`);
+  const data = await res.json();
+  allPhotos  = data.photos || [];
+  renderPhotos(allPhotos);
+}
+
+function renderPhotos(photos) {
+  const grid = document.getElementById('photo_grid');
+  if (photos.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📷</div><p>사진이 없습니다.</p></div>`;
+    return;
+  }
+  grid.innerHTML = photos.map(p => `
+    <div class="photo-cell" onclick="openModal('${p.photo_path}', '${p.main_category || ''}', ${JSON.stringify(p.sub_categories || [])})">
+      <img src="/media/images/${p.photo_path.split('/').pop()}" alt="" onerror="this.style.display='none'">
+      ${p.analysis_status === 'pending' ? '<div class="badge">분석중</div>' : ''}
+      ${p.main_category ? `<div class="badge">${p.main_category}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function filterPhotos(category, el) {
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (category === '전체') {
+    renderPhotos(allPhotos);
+  } else {
+    renderPhotos(allPhotos.filter(p => p.main_category === category));
+  }
+}
+
+function openModal(path, category, tags) {
+  document.getElementById('modal_img').src = '/media/images/' + path.split('/').pop();
+  document.getElementById('modal_cat').textContent = category;
+  document.getElementById('modal_keywords').innerHTML = tags.map(t => `<span class="tag">#${t}</span>`).join('');
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+loadPhotos();
+</script>
+</body>
+</html>
