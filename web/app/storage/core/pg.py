@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 
@@ -6,6 +7,7 @@ load_dotenv()
 
 pg_alchemy = SQLAlchemy()
 
+# .env에서 DB 접속정보 읽어 Flask 앱에 SQLAlchemy 연결 (도커 내부 postgresql 호스트 사용)
 def init_pg(app):
     db = os.getenv("POSTGRES_DB", "capstone_db")
     user = os.getenv("FLASK_DB_ID", "flask_server")

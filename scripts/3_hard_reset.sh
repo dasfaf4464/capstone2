@@ -14,7 +14,7 @@ echo "[2/4] 임시 미디어 폴더(uploads, results) 비우는 중..."
 rm -rf media_storage/uploads/* media_storage/results/*
 
 echo "[3/4] DB 데이터 및 로그 폴더 비우는 중..."
-rm -rf postgresql/db_data/* neo4j/data/* neo4j/logs/*
+rm -rf postgresql/db_data/*
 
 echo "[4/4] 완전히 비워진 상태로 다시 빌드 중..."
 docker-compose up -d --build

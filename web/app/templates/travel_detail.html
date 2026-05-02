@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 여행 사진</title>
+<link rel="stylesheet" href="/static/common.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  /* ── 통계 카드 ── */
+  .stats-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 700; color: #333;
+    cursor: pointer; user-select: none;
+  }
+  .stats-arrow { font-size: 11px; color: #bbb; transition: transform 0.2s; }
+  .stats-arrow.open { transform: rotate(180deg); }
+
+  .stats-body { margin-top: 10px; }
+
+  /* 도넛 차트 영역 축소 */
+  .stats-chart-wrap {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 10px;
+  }
+  .stats-chart-wrap canvas { max-width: 90px; flex-shrink: 0; }
+
+  .kw-sub-label { font-size: 12px; color: #999; margin: 12px 0 7px; }
+
+  /* 인물 통계 */
+  .person-stat {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: #555; margin-bottom: 4px;
+  }
+  .person-bar-wrap { flex: 1; height: 7px; background: #eee; border-radius: 4px; overflow: hidden; }
+  .person-bar { height: 100%; background: #4f8ef7; border-radius: 4px; transition: width 0.4s; }
+  .person-pct { font-size: 12px; color: #aaa; min-width: 36px; text-align: right; }
+
+  /* 활동 통계 목록 */
+  .kw-stat-list { display: flex; flex-direction: column; gap: 5px; }
+  .kw-stat-row {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+  }
+  .kw-stat-name { color: #4f8ef7; min-width: 70px; }
+  .kw-stat-bar-wrap { flex: 1; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+  .kw-stat-bar { height: 100%; background: #4f8ef7; border-radius: 3px; transition: width 0.4s; }
+  .kw-stat-count { font-size: 11px; color: #bbb; min-width: 20px; text-align: right; }
+
+  /* ── 사진 모달 (중앙) ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78); z-index: 200;
+    justify-content: center; align-items: center;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal-sheet {
+    background: white; border-radius: 16px;
+    width: 100%; max-width: 400px; max-height: 88vh;
+    overflow-y: auto;
+    animation: fadeScale 0.18s ease;
+  }
+  @keyframes fadeScale {
+    from { transform: scale(0.94); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .modal-img-wrap { position: relative; width: 100%; background: #111; border-radius: 16px 16px 0 0; overflow: hidden; }
+  .modal-img-wrap img {
+    width: 100%; max-height: 55vh; object-fit: contain; display: block;
+  }
+  .modal-close-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(0,0,0,0.45); color: white;
+    border: none; border-radius: 50%; width: 30px; height: 30px;
+    font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .modal-body { padding: 14px 16px 20px; }
+  .modal-cat-badge {
+    display: inline-block;
+    background: #e8f0ff; color: #4f8ef7;
+    font-size: 12px; font-weight: 700;
+    padding: 3px 11px; border-radius: 20px; margin-bottom: 7px;
+  }
+  .modal-meta {
+    font-size: 12px; color: #888;
+    display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .modal-tags-label { font-size: 11px; color: #aaa; margin-bottom: 6px; }
+  .modal-tags-empty { font-size: 13px; color: #bbb; }
+
+  /* 실패 뱃지 */
+  .badge-fail { background: rgba(220,50,50,0.65) !important; }
+
+  /* 재시도 버튼 */
+  .btn-retry {
+    margin-top: 10px; padding: 9px 20px;
+    background: #ff6b6b; color: white;
+    border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    width: 100%; transition: background 0.2s;
+  }
+  .btn-retry:hover { background: #e55; }
+  .btn-retry:disabled { background: #ccc; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="back" onclick="history.back()">←</span>
+  <span class="title" id="travel_title">여행 사진</span>
+</div>
+
+<div class="content">
+
+  <!-- ── 여행 통계 카드 (기본값: 접힘) ── -->
+  <div class="card" id="stats_card" style="display:none">
+    <div class="stats-toggle" onclick="toggleStats()">
+      <span>📊 이 여행 통계</span>
+      <span class="stats-arrow" id="stats_arrow">▼</span>
+    </div>
+    <div class="stats-body" id="stats_body" style="display:none">
+      <div class="stats-chart-wrap">
+        <canvas id="travelDonut" width="90" height="90"></canvas>
+        <div class="legend" id="travel_legend"></div>
+      </div>
+      <!-- 인물 통계 -->
+      <p class="kw-sub-label">👤 인물 포함</p>
+      <div id="travel_person"></div>
+
+      <!-- 활동 통계 (있을 때만 표시) -->
+      <div id="travel_activity_wrap" style="display:none">
+        <p class="kw-sub-label">🏃 활동별</p>
+        <div class="kw-stat-list" id="travel_activity"></div>
+      </div>
+
+      <p class="kw-sub-label">태그 전체 통계</p>
+      <div class="kw-stat-list" id="travel_keywords"></div>
+    </div>
+  </div>
+
+  <!-- ── 카테고리 필터 ── -->
+  <div class="filter-tabs" id="filter_tabs">
+    <div class="filter-tab active" onclick="filterPhotos('전체', this)">전체</div>
+    <div class="filter-tab" onclick="filterPhotos('풍경/장소', this)">풍경/장소</div>
+    <div class="filter-tab" onclick="filterPhotos('음식', this)">음식</div>
+    <div class="filter-tab" onclick="filterPhotos('기록', this)">기록</div>
+  </div>
+
+  <div class="photo-grid" id="photo_grid"></div>
+
+</div>
+
+<!-- ── 사진 상세 모달 (중앙) ── -->
+<div class="modal-overlay" id="modal_overlay" onclick="handleOverlayClick(event)">
+  <div class="modal-sheet" id="modal_sheet">
+    <div class="modal-img-wrap">
+      <img id="modal_img" src="" alt="">
+      <button class="modal-close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-cat-badge" id="modal_cat"></div>
+      <div class="modal-meta" id="modal_meta"></div>
+      <div class="modal-tags-label">태그</div>
+      <div id="modal_keywords"></div>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="/archive" class="nav-item active">
+    <span class="icon">🗂️</span>아카이브
+  </a>
+  <a href="/search" class="nav-item">
+    <span class="icon">🔍</span>검색
+  </a>
+  <a href="/upload" class="nav-plus">＋</a>
+  <a href="/analysis" class="nav-item">
+    <span class="icon">📊</span>성향분석
+  </a>
+  <a href="/home" class="nav-item">
+    <span class="icon">🏠</span>홈
+  </a>
+</nav>
+
+<script>
+const travelUuid    = '{{ travel_uuid }}';
+const COLORS        = ['#4f8ef7', '#ff9f43', '#54a0ff'];
+let allPhotos       = [];
+let displayedPhotos = [];
+let travelChart     = null;
+let pollingTimer    = null;
+
+/* ── 사진 목록 로드 ── */
+async function loadPhotos() {
+  const res  = await fetch(`/api/travel/${travelUuid}/photos`);
+  const data = await res.json();
+  allPhotos  = data.photos || [];
+
+  // 현재 선택된 필터 유지
+  const activeTab = document.querySelector('.filter-tab.active');
+  const category  = activeTab ? activeTab.textContent.trim() : '전체';
+  renderPhotos(category === '전체' ? allPhotos : allPhotos.filter(p => p.main_category === category));
+
+  // 분석 중인 사진이 있으면 DB 기반 폴링 시작
+  const hasPending = allPhotos.some(p => p.analysis_status === 'pending');
+  if (hasPending) {
+    startPolling();
+  } else {
+    stopPolling();
+  }
+}
+
+/* ── 여행 통계 로드 ── */
+async function loadStats() {
+  const res = await fetch(`/api/travel/${travelUuid}/stats`);
+  if (!res.ok) return;
+  const data = await res.json();
+  if (data.result !== 'success') return;
+
+  if (data.travel_name) {
+    document.getElementById('travel_title').textContent = data.travel_name;
+  }
+
+  const catStats      = data.category_stats  || {};
+  const kwStats       = data.keyword_stats   || [];
+  const personStats   = data.person_stats    || {with_person: 0, total: 0};
+  const activityStats = data.activity_stats  || [];
+  const labels        = Object.keys(catStats);
+  const values   = Object.values(catStats);
+  const total    = values.reduce((a, b) => a + b, 0);
+
+  if (labels.length === 0) return;
+
+  document.getElementById('stats_card').style.display = 'block';
+
+  // 도넛 차트
+  const ctx = document.getElementById('travelDonut').getContext('2d');
+  if (travelChart) travelChart.destroy();
+  travelChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0 }]
+    },
+    options: {
+      cutout: '65%',
+      plugins: { legend: { display: false } },
+      animation: { duration: 400 }
+    }
+  });
+
+  // 범례
+  document.getElementById('travel_legend').innerHTML = labels.map((l, i) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${COLORS[i]}"></div>
+      <span>${l} ${total > 0 ? Math.round(values[i] / total * 100) : 0}%</span>
+    </div>
+  `).join('');
+
+  // 인물 통계
+  const personEl  = document.getElementById('travel_person');
+  const personPct = personStats.total > 0
+    ? Math.round(personStats.with_person / personStats.total * 100) : 0;
+  personEl.innerHTML = `
+    <div class="person-stat">
+      <span>${personStats.with_person}장 / ${personStats.total}장</span>
+      <div class="person-bar-wrap">
+        <div class="person-bar" style="width:${personPct}%"></div>
+      </div>
+      <span class="person-pct">${personPct}%</span>
+    </div>`;
+
+  // 활동 통계 (있을 때만)
+  if (activityStats.length > 0) {
+    const actWrap = document.getElementById('travel_activity_wrap');
+    const actEl   = document.getElementById('travel_activity');
+    const maxAct  = activityStats[0].count;
+    actWrap.style.display = 'block';
+    actEl.innerHTML = activityStats.map(a => `
+      <div class="kw-stat-row">
+        <span class="kw-stat-name">${a.activity}</span>
+        <div class="kw-stat-bar-wrap">
+          <div class="kw-stat-bar" style="width:${Math.round(a.count / maxAct * 100)}%"></div>
+        </div>
+        <span class="kw-stat-count">${a.count}</span>
+      </div>`).join('');
+  }
+
+  // 태그 전체 통계 (바 차트 형태)
+  const kwEl  = document.getElementById('travel_keywords');
+  const maxCnt = kwStats.length > 0 ? kwStats[0].count : 1;
+  if (kwStats.length > 0) {
+    kwEl.innerHTML = kwStats.map(k => `
+      <div class="kw-stat-row">
+        <span class="kw-stat-name">#${k.keyword}</span>
+        <div class="kw-stat-bar-wrap">
+          <div class="kw-stat-bar" style="width:${Math.round(k.count / maxCnt * 100)}%"></div>
+        </div>
+        <span class="kw-stat-count">${k.count}</span>
+      </div>
+    `).join('');
+  } else {
+    kwEl.innerHTML = '<span class="modal-tags-empty">아직 태그가 없습니다.</span>';
+  }
+}
+
+/* ── 통계 접기/펼치기 ── */
+function toggleStats() {
+  const body  = document.getElementById('stats_body');
+  const arrow = document.getElementById('stats_arrow');
+  const open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  arrow.classList.toggle('open', !open);
+}
+
+/* ── 사진 그리드 렌더링 ── */
+function renderPhotos(photos) {
+  displayedPhotos = photos;
+  const grid = document.getElementById('photo_grid');
+  if (photos.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <div class="icon">📷</div><p>사진이 없습니다.</p></div>`;
+    return;
+  }
+  grid.innerHTML = photos.map((p, i) => {
+    let badge = '';
+    if      (p.analysis_status === 'pending') badge = '<div class="badge">분석중</div>';
+    else if (p.analysis_status === 'fail')    badge = '<div class="badge badge-fail">실패</div>';
+    else if (p.main_category)                 badge = `<div class="badge">${p.main_category}</div>`;
+    return `
+    <div class="photo-cell" onclick="openModal(${i})">
+      <img src="/media/images/${p.photo_path.split('/').pop()}"
+           alt="" onerror="this.style.display='none'">
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+/* ── 카테고리 필터 ── */
+function filterPhotos(category, el) {
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderPhotos(category === '전체'
+    ? allPhotos
+    : allPhotos.filter(p => p.main_category === category));
+}
+
+/* ── 사진 모달 열기 ── */
+function openModal(idx) {
+  const p = displayedPhotos[idx];
+
+  document.getElementById('modal_img').src =
+    '/media/images/' + p.photo_path.split('/').pop();
+
+  document.getElementById('modal_cat').textContent = p.main_category || '미분류';
+
+  const meta = [];
+  if (p.has_person) meta.push('<span>👤 인물 포함</span>');
+  if (p.activity)   meta.push(`<span>🏃 ${p.activity}</span>`);
+  document.getElementById('modal_meta').innerHTML = meta.join('');
+
+  const kwEl = document.getElementById('modal_keywords');
+  if (p.analysis_status === 'pending') {
+    kwEl.innerHTML = '<span class="modal-tags-empty">AI 분석 중입니다…</span>';
+  } else if (p.analysis_status === 'fail') {
+    kwEl.innerHTML = `
+      <span class="modal-tags-empty" style="color:#e55;">분석에 실패했습니다.</span><br>
+      <button class="btn-retry" onclick="retryPhoto('${p.photo_uuid}', this)">🔄 분석 재시도</button>
+    `;
+  } else if (p.sub_categories && p.sub_categories.length > 0) {
+    kwEl.innerHTML = p.sub_categories.map(t => `<span class="tag">#${t}</span>`).join('');
+  } else {
+    kwEl.innerHTML = '<span class="modal-tags-empty">태그 없음</span>';
+  }
+
+  document.getElementById('modal_overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+/* ── 모달 닫기 ── */
+function closeModal() {
+  document.getElementById('modal_overlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal_overlay')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ── 분석 완료 폴링 (DB 기반 — 서버 재시작에도 안전) ── */
+function startPolling() {
+  stopPolling();  // 중복 방지
+  pollingTimer = setInterval(async () => {
+    try {
+      const res  = await fetch(`/api/travel/${travelUuid}/photos`);
+      const data = await res.json();
+      if (data.result !== 'success') return;  // 오류 응답은 이번 tick만 스킵, 폴링 유지
+      const photos = data.photos || [];
+
+      const stillPending = photos.some(p => p.analysis_status === 'pending');
+      if (!stillPending) {
+        // 모두 완료 → 목록·통계 갱신 후 폴링 중단
+        stopPolling();
+        allPhotos = photos;
+        const activeTab = document.querySelector('.filter-tab.active');
+        const category  = activeTab ? activeTab.textContent.trim() : '전체';
+        renderPhotos(category === '전체'
+          ? allPhotos
+          : allPhotos.filter(p => p.main_category === category));
+        await loadStats();
+      }
+    } catch (e) {
+      console.warn('[polling] 오류:', e);
+    }
+  }, 4000);  // 4초마다 DB에서 직접 확인
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
+}
+
+/* ── 분석 재시도 ── */
+async function retryPhoto(photoUuid, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '요청 중…'; }
+
+  try {
+    const res  = await fetch(`/api/photo/${photoUuid}/retry`, { method: 'POST' });
+    const data = await res.json();
+
+    if (data.result === 'success') {
+      closeModal();
+      await loadPhotos();   // pending 상태로 바뀌므로 폴링 자동 시작됨
+    } else {
+      alert(data.msg || '재시도 요청 실패');
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 분석 재시도'; }
+    }
+  } catch (e) {
+    alert('네트워크 오류가 발생했습니다.');
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 분석 재시도'; }
+  }
+}
+
+/* ── 초기 로드 ── */
+loadPhotos();
+loadStats();
+</script>
+</body>
+</html>

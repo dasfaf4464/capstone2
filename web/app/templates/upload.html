@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 업로드</title>
+<link rel="stylesheet" href="/static/common.css">
+<style>
+  .step { display: none; }
+  .step.active { display: block; }
+  .step-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: #333; }
+
+  /* 5.2 여행 정보 입력 */
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+  .date-row { display: flex; gap: 8px; }
+  .date-row input { flex: 1; }
+
+  /* 5 업로드 */
+  .upload-zone { border: 2px dashed #c0d4ff; border-radius: 14px; padding: 40px 20px; text-align: center; cursor: pointer; background: #f7faff; transition: all 0.2s; }
+  .upload-zone:hover { border-color: #4f8ef7; background: #eef3ff; }
+  .upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
+  .upload-zone p { color: #888; font-size: 14px; }
+  .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+  .preview-thumb { aspect-ratio: 1; border-radius: 8px; object-fit: cover; width: 100%; }
+
+  /* 5.1 업로딩 중 */
+  .uploading-box { text-align: center; padding: 60px 20px; }
+  .uploading-box .icon { font-size: 48px; margin-bottom: 16px; }
+  .uploading-box p { color: #666; font-size: 15px; margin-bottom: 8px; }
+  .uploading-box .sub { color: #aaa; font-size: 13px; }
+  .progress-bar { width: 100%; height: 6px; background: #eee; border-radius: 10px; margin-top: 20px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #4f8ef7; border-radius: 10px; animation: loading 1.5s ease-in-out infinite; }
+  @keyframes loading { 0%,100%{width:20%} 50%{width:80%} }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="back" onclick="goBack()">←</span>
+  <span class="title" id="step_title">여행 정보 입력</span>
+</div>
+
+<div class="content">
+
+  <!-- STEP 1: 5.2 여행 정보 입력 (먼저 실행) -->
+  <div class="step active" id="step_travel">
+    <div class="card">
+      <div class="form-group">
+        <label>여행 이름</label>
+        <input class="input-field" type="text" id="travel_name" placeholder="예: 도쿄 여행">
+      </div>
+      <div class="form-group">
+        <label>여행 기간</label>
+        <div class="date-row">
+          <input class="input-field" type="date" id="start_date">
+          <input class="input-field" type="date" id="end_date">
+        </div>
+      </div>
+      <button class="btn-primary" onclick="createTravel()">다음</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: 5 사진 업로드 -->
+  <div class="step" id="step_upload">
+    <div class="upload-zone" onclick="document.getElementById('file_input').click()">
+      <div class="icon">📷</div>
+      <p>사진을 선택해주세요<br><small>여러 장 동시 선택 가능</small></p>
+    </div>
+    <input type="file" id="file_input" multiple accept="image/*" style="display:none" onchange="previewFiles()">
+    <div class="preview-grid" id="preview_grid"></div>
+    <button class="btn-primary" style="margin-top:16px" onclick="uploadPhotos()">업로드</button>
+  </div>
+
+  <!-- STEP 3: 5.1 업로딩 중 -->
+  <div class="step" id="step_loading">
+    <div class="uploading-box">
+      <div class="icon">🔄</div>
+      <p>업로드 중입니다</p>
+      <p class="sub">AI가 사진을 분석하고 있어요. 잠시만 기다려주세요...</p>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let travelUuid = null;
+let selectedFiles = [];
+
+function goBack() {
+  const steps = ['step_travel', 'step_upload', 'step_loading'];
+  const titles = ['여행 정보 입력', '사진 업로드', '업로드 중'];
+  const cur = steps.findIndex(s => document.getElementById(s).classList.contains('active'));
+  if (cur <= 0) { history.back(); return; }
+  showStep(cur - 1, steps, titles);
+}
+
+function showStep(idx, steps, titles) {
+  steps.forEach(s => document.getElementById(s).classList.remove('active'));
+  document.getElementById(steps[idx]).classList.add('active');
+  document.getElementById('step_title').textContent = titles[idx];
+}
+
+async function createTravel() {
+  const travel_name = document.getElementById('travel_name').value.trim();
+  const start_date  = document.getElementById('start_date').value;
+  const end_date    = document.getElementById('end_date').value;
+
+  if (!travel_name || !start_date || !end_date) {
+    alert('여행 이름과 기간을 모두 입력해주세요.'); return;
+  }
+
+  const res  = await fetch('/api/travel/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ travel_name, start_date, end_date })
+  });
+  const data = await res.json();
+
+  if (data.result === 'success') {
+    travelUuid = data.travel_data.travel_uuid;
+    showStep(1, ['step_travel','step_upload','step_loading'], ['여행 정보 입력','사진 업로드','업로드 중']);
+  } else {
+    alert(data.msg || '여행 생성 실패');
+  }
+}
+
+function previewFiles() {
+  selectedFiles = Array.from(document.getElementById('file_input').files);
+  const grid = document.getElementById('preview_grid');
+  grid.innerHTML = selectedFiles.map(f => {
+    const url = URL.createObjectURL(f);
+    return `<img class="preview-thumb" src="${url}" alt="">`;
+  }).join('');
+}
+
+async function uploadPhotos() {
+  if (selectedFiles.length === 0) { alert('사진을 선택해주세요.'); return; }
+  if (!travelUuid) { alert('여행 정보를 먼저 입력해주세요.'); return; }
+
+  showStep(2, ['step_travel','step_upload','step_loading'], ['여행 정보 입력','사진 업로드','업로드 중']);
+
+  const formData = new FormData();
+  formData.append('travel_uuid', travelUuid);
+  selectedFiles.forEach(f => formData.append('photos', f));
+
+  const res  = await fetch('/api/photo/upload', { method: 'POST', body: formData });
+  const data = await res.json();
+
+  if (data.result === 'success') {
+    // 분석 완료 대기 후 이동
+    setTimeout(() => location.href = `/travel/${travelUuid}`, 3000);
+  } else {
+    alert(data.msg || '업로드 실패');
+    showStep(1, ['step_travel','step_upload','step_loading'], ['여행 정보 입력','사진 업로드','업로드 중']);
+  }
+}
+</script>
+</body>
+</html>

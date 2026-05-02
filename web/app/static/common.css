@@ -1,0 +1,73 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f7f8fc; color: #222; padding-bottom: 70px; }
+
+/* 상단 헤더 */
+.top-bar { background: white; padding: 16px 20px; font-size: 18px; font-weight: 700; color: #4f8ef7; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 10px; }
+.top-bar .back { cursor: pointer; font-size: 20px; color: #555; }
+.top-bar .title { flex: 1; }
+
+/* 하단 네비게이션 */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #eee; display: flex; justify-content: space-around; align-items: center; height: 60px; z-index: 100; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #aaa; font-size: 11px; text-decoration: none; flex: 1; padding: 8px 0; transition: color 0.2s; }
+.nav-item.active { color: #4f8ef7; }
+.nav-item .icon { font-size: 22px; }
+.nav-plus { background: #4f8ef7; color: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 300; cursor: pointer; text-decoration: none; margin-bottom: 4px; }
+
+/* 콘텐츠 영역 */
+.content { padding: 20px; max-width: 480px; margin: 0 auto; }
+
+/* 카드 */
+.card { background: white; border-radius: 14px; padding: 18px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+/* 버튼 */
+.btn-primary { background: #4f8ef7; color: white; border: none; border-radius: 10px; padding: 13px 20px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.2s; }
+.btn-primary:hover { background: #3a7ae0; }
+.btn-outline { background: white; color: #4f8ef7; border: 1.5px solid #4f8ef7; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-outline:hover { background: #f0f4ff; }
+
+/* 섹션 타이틀 */
+.section-title { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 12px; }
+
+/* 태그 */
+.tag { display: inline-block; background: #f0f4ff; color: #4f8ef7; border-radius: 20px; padding: 4px 12px; font-size: 13px; margin: 3px; cursor: pointer; }
+.tag:hover { background: #dce8ff; }
+
+/* 그리드 */
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.photo-cell { aspect-ratio: 1; overflow: hidden; border-radius: 6px; cursor: pointer; position: relative; background: #eee; }
+.photo-cell img { width: 100%; height: 100%; object-fit: cover; }
+.photo-cell .badge { position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.55); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; }
+
+/* 인풋 */
+.input-field { width: 100%; padding: 12px 14px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; outline: none; transition: border 0.2s; }
+.input-field:focus { border-color: #4f8ef7; }
+
+/* 도넛 차트 컨테이너 */
+.chart-wrap { display: flex; align-items: center; gap: 20px; }
+.chart-wrap canvas { max-width: 140px; }
+.legend { flex: 1; }
+.legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+/* 여행 카드 */
+.travel-card { display: flex; gap: 14px; align-items: center; background: white; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer; text-decoration: none; color: inherit; transition: transform 0.15s; }
+.travel-card:hover { transform: translateY(-2px); }
+.travel-thumb { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
+.travel-info .name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.travel-info .date { font-size: 12px; color: #888; }
+
+/* 필터 탭 */
+.filter-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; }
+.filter-tabs::-webkit-scrollbar { display: none; }
+.filter-tab { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1.5px solid #ddd; color: #666; background: white; transition: all 0.2s; }
+.filter-tab.active { background: #4f8ef7; color: white; border-color: #4f8ef7; }
+
+/* 로딩 */
+.loading { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+.spinner { width: 36px; height: 36px; border: 3px solid #eee; border-top-color: #4f8ef7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 빈 상태 */
+.empty { text-align: center; padding: 60px 20px; color: #aaa; }
+.empty .icon { font-size: 48px; margin-bottom: 12px; }
+.empty p { font-size: 14px; }

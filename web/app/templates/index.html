@@ -1,9 +1,126 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>docker-skeleton-index</title>
-    </head>
-    <body>
-        <p>index page - skeleton</p>
-    </body>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 메인</title>
+<link rel="stylesheet" href="/static/common.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  .personality { font-size: 17px; font-weight: 700; color: #333; margin-bottom: 16px; text-align: center; }
+  .keywords { margin-top: 14px; }
+  .keywords .label { font-size: 13px; color: #888; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="title">ToT ✈️</span>
+  <span style="font-size:13px;color:#aaa;cursor:pointer" onclick="logout()">로그아웃</span>
+</div>
+
+<div class="content">
+
+  <!-- 성향 카드 -->
+  <div class="card">
+    <p class="personality" id="personality_type">사진을 올리면 성향을 분석해드립니다 ✨</p>
+
+    <div class="chart-wrap">
+      <canvas id="donutChart" width="140" height="140"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="keywords">
+      <p class="label">자주 찍은 키워드</p>
+      <div id="keywords_wrap"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- 하단 네비게이션 -->
+<nav class="bottom-nav">
+  <a href="/archive" class="nav-item">
+    <span class="icon">🗂️</span>아카이브
+  </a>
+  <a href="/search" class="nav-item">
+    <span class="icon">🔍</span>검색
+  </a>
+  <a href="/upload" class="nav-plus">＋</a>
+  <a href="/analysis" class="nav-item">
+    <span class="icon">📊</span>성향분석
+  </a>
+  <a href="/home" class="nav-item active">
+    <span class="icon">🏠</span>홈
+  </a>
+</nav>
+
+<script>
+const COLORS = ['#4f8ef7', '#ff9f43', '#54a0ff'];
+let chart = null;
+
+async function loadStats() {
+  const [statsRes, recRes] = await Promise.all([
+    fetch('/api/user/stats'),
+    fetch('/api/user/recommendation')
+  ]);
+  const stats = await statsRes.json();
+  const rec   = await recRes.json();
+
+  // 성향 문구
+  document.getElementById('personality_type').textContent = rec.personality_type || '';
+
+  // 도넛 차트
+  const catStats = stats.category_stats || {};
+  const labels   = Object.keys(catStats);
+  const values   = Object.values(catStats);
+  const total    = values.reduce((a, b) => a + b, 0);
+
+  if (labels.length > 0) {
+    const ctx = document.getElementById('donutChart').getContext('2d');
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0 }]
+      },
+      options: {
+        cutout: '65%',
+        plugins: { legend: { display: false } },
+        animation: { duration: 600 }
+      }
+    });
+
+    // 범례
+    const legendEl = document.getElementById('legend');
+    legendEl.innerHTML = labels.map((l, i) => `
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${COLORS[i]}"></div>
+        <span>${l} ${total > 0 ? Math.round(values[i]/total*100) : 0}%</span>
+      </div>
+    `).join('');
+  }
+
+  // 키워드
+  const keywords = stats.keyword_stats || [];
+  const kwWrap   = document.getElementById('keywords_wrap');
+  if (keywords.length > 0) {
+    kwWrap.innerHTML = keywords.slice(0, 5).map(k =>
+      `<span class="tag">#${k.keyword}</span>`
+    ).join('');
+  } else {
+    kwWrap.textContent = '아직 태그가 없습니다.';
+  }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/';
+}
+
+loadStats();
+</script>
+</body>
 </html>
