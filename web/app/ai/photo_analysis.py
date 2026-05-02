@@ -62,7 +62,10 @@ def analyze_photo(photo_path: str) -> dict:
   · true 조건: 셀카, 인물 사진, 사람이 화면의 30% 이상을 차지하는 경우, 사람이 명확히 사진의 주인공인 경우
   · false 조건: 사람이 배경에 작게 찍힌 경우, 군중 속 지나가는 행인, 멀리서 점처럼 보이는 경우, 풍경 사진에 사람이 일부 포함된 경우
 
-- activity: has_person이 true이고 사람이 특정 활동 중이면 활동명 (예: "하이킹", "수상스포츠", "사이클링"), 없으면 null
+- activity: has_person이 true이고 사람이 신체적 활동을 하고 있을 때만 활동명, 없으면 null
+  · 포함 가능한 활동 예시: 하이킹, 등산, 수영, 수상스포츠, 서핑, 사이클링, 자전거, 스키, 스노보드, 암벽등반, 캠핑, 낚시, 골프, 테니스, 달리기, 요가
+  · 반드시 null로 처리할 것: 여행, 관광, 사진촬영, 식사, 쇼핑, 산책, 구경, 감상, 휴식 — 이런 일반적 행위는 활동으로 보지 않음
+  · 사람이 단순히 서 있거나 앉아 있거나 포즈를 취하는 경우도 null
 """
     try:
         image = Image.open(photo_path)
@@ -86,9 +89,14 @@ def analyze_photo(photo_path: str) -> dict:
 
         result['has_person'] = bool(result.get('has_person', False))
 
-        # activity 비표준 문자열 정규화 ("없음", "-", "null", "" 등 → None)
+        # activity 후처리 — 비표준 문자열 및 일반 행위 → None
         act = result.get('activity')
-        if not act or str(act).strip().lower() in ('null', 'none', '없음', '해당없음', '-', 'n/a', 'na'):
+        _invalid_activities = {
+            'null', 'none', '없음', '해당없음', '-', 'n/a', 'na',
+            '여행', '관광', '사진촬영', '사진', '식사', '쇼핑', '산책',
+            '구경', '감상', '휴식', '관람', '탑승', '이동', '방문',
+        }
+        if not act or str(act).strip().lower() in _invalid_activities:
             result['activity'] = None
 
         return result
@@ -117,23 +125,38 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
     # 상위 7개 (인물포함·활동 태그도 포함된 통합 순위)
     top_keywords = [f"{item['keyword']}({item['count']}장)" for item in keyword_stats[:7]]
 
+    # 카테고리 비율 문장화
+    total_photos = sum(category_stats.values())
+    cat_lines = []
+    for cat, cnt in sorted(category_stats.items(), key=lambda x: -x[1]):
+        pct = round(cnt / total_photos * 100) if total_photos else 0
+        cat_lines.append(f"{cat} {pct}%({cnt}장)")
+    cat_summary = ', '.join(cat_lines)
+
     prompt = f"""
 아래는 유저의 여행 사진 통계야.
 
-주카테고리 비율: {json.dumps(category_stats, ensure_ascii=False)}
+전체 사진 수: {total_photos}장
+카테고리 비율: {cat_summary}
 상위 태그 (빈도순, 인물·활동 포함): {top_keywords}
 
 이 데이터를 기반으로 아래 JSON 형식으로만 답해줘. 다른 텍스트는 절대 포함하지 마.
 
 {{
-  "personality_type": "당신은 ~한 여행자입니다 (20자 이내)",
+  "personality_type": "여행 성향을 나타내는 라벨 (예: 감성 풍경 수집가, 미식 탐험가, 액티비티 러버 등, 10자 이내)",
+  "personality_desc": "통계 기반 여행 성향 상세 분석 (5~7줄, 자연스러운 한국어)",
   "recommendation": "다음 여행지 추천 + 이유 (3~4줄, 자연스러운 한국어)"
 }}
 
 규칙:
-- personality_type은 '당신은 '으로 시작하는 20자 이내 문장
-- recommendation은 구체적인 여행지 1~2곳 추천 + 이유를 3~4줄로 작성
-- 통계에서 가장 많은 카테고리와 태그를 반영해서 작성
+- personality_type은 유저의 여행 스타일을 함축하는 10자 이내 라벨
+- personality_desc는 아래 항목을 모두 포함해서 5~7줄로 구체적으로 분석할 것:
+  · 주요 카테고리 비율을 근거로 어떤 유형의 여행자인지
+  · 상위 태그들이 의미하는 선호 장소·음식·활동
+  · '인물포함' 태그 비율이 높으면 동행 여행·인물 사진 선호 언급, 낮으면 풍경·사물 중심 언급
+  · 활동 태그(하이킹, 수상스포츠 등)가 있으면 액티비티 성향 분석
+  · 전반적인 여행 스타일 총평으로 마무리
+- recommendation은 personality_desc 분석을 바탕으로 구체적인 여행지 1~2곳 + 추천 이유를 3~4줄로 작성
 - 상위 태그에 '인물포함'이 있으면 인물 사진 찍기 좋은 명소·셀카 스팟을 추천에 포함할 것
 - 상위 태그에 활동명(하이킹, 수상스포츠 등)이 있으면 해당 활동을 즐길 수 있는 여행지를 추천에 포함할 것
 """
@@ -151,8 +174,9 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
     except Exception as e:
         print(f"[photo_analysis] 추천 생성 실패: {e}")
         return {
-            'personality_type': '당신은 여행을 사랑하는 탐험가입니다',
-            'recommendation': '사진이 쌓일수록 더 정확한 추천을 드릴 수 있어요. 더 많은 여행 사진을 업로드해보세요!'
+            'personality_type': '여행 탐험가',
+            'personality_desc': '사진이 쌓일수록 더 정확한 성향 분석을 드릴 수 있어요.',
+            'recommendation':   '더 많은 여행 사진을 업로드하면 맞춤형 여행지를 추천해드립니다!',
         }
 
 
@@ -234,6 +258,7 @@ def _refresh_user_stats(user_uuid: str):
             category_stats=category_stats,
             keyword_stats=keyword_stats,
             personality_type=llm_result.get('personality_type'),
+            personality_desc=llm_result.get('personality_desc'),
             recommendation=llm_result.get('recommendation'),
         )
     except Exception as e:

@@ -61,14 +61,16 @@ def get_recommendation():
 
         if not stats or not stats.personality_type:
             return jsonify({
-                'result':          'success',
+                'result':           'success',
                 'personality_type': '여행 사진을 올리면 성향을 분석해드립니다!',
+                'personality_desc': None,
                 'recommendation':   '사진을 업로드하고 나만의 여행 성향을 확인해보세요.',
             }), 200
 
         return jsonify({
             'result':           'success',
             'personality_type': stats.personality_type,
+            'personality_desc': stats.personality_desc,
             'recommendation':   stats.recommendation,
         }), 200
 

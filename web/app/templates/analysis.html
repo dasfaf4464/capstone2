@@ -16,6 +16,7 @@
   .keyword-count { color: #aaa; font-size: 11px; margin-left: 2px; }
   .rec-box { background: #f0f4ff; border-radius: 12px; padding: 18px; font-size: 14px; color: #444; line-height: 1.7; white-space: pre-line; }
   .personality-badge { display: inline-block; background: #4f8ef7; color: white; border-radius: 20px; padding: 6px 16px; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .personality-desc { font-size: 14px; color: #444; line-height: 1.8; white-space: pre-line; margin-top: 10px; background: #f8f9ff; border-radius: 10px; padding: 14px 16px; }
 </style>
 </head>
 <body>
@@ -41,6 +42,12 @@
     <div class="keyword-list" id="keyword_list">
       <p style="color:#aaa;font-size:13px">아직 키워드가 없습니다.</p>
     </div>
+  </div>
+
+  <!-- 성향 분석 -->
+  <div class="card" id="personality_desc_card" style="display:none">
+    <p class="section-title">✍️ 성향 분석</p>
+    <div class="rec-box" id="personality_desc_box"></div>
   </div>
 
   <!-- 추천 -->
@@ -78,10 +85,17 @@ async function loadAnalysis() {
   const stats = await statsRes.json();
   const rec   = await recRes.json();
 
-  // 성향 배지
+  // 성향 배지 + 상세 분석
   const badgeEl = document.getElementById('personality_badge');
   if (rec.personality_type) {
     badgeEl.innerHTML = `<div class="personality-badge">${rec.personality_type}</div>`;
+  }
+  // 성향 분석 카드 (별도 카드)
+  if (rec.personality_desc) {
+    const descBox  = document.getElementById('personality_desc_box');
+    const descCard = document.getElementById('personality_desc_card');
+    descBox.textContent = rec.personality_desc;
+    descCard.style.display = 'block';
   }
 
   // 주카테고리 막대 차트
