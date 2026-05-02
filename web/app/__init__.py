@@ -13,34 +13,28 @@ def create_app():
 
     init_pg(app)
 
-    temp_dir = os.getenv("MEDIA_STORAGE_TEMP", "temp")
+    # 미디어 저장 폴더 설정
     media_base = os.getenv("MEDIA_STORAGE_BASE", "media")
-    uploads_dir = os.getenv("MEDIA_STORAGE_UPLOADS", "uploads")
-    results_dir = os.getenv("MEDIA_STORAGE_RESULTS", "results")
-    save_dir = os.getenv("MEDIA_STORAGE_USERS", "users")
+    save_dir   = os.getenv("MEDIA_STORAGE_USERS", "users")
 
-    app.config['UPLOAD_FOLDER'] = os.path.join(media_base, uploads_dir)
-    app.config['RESULT_FOLDER'] = os.path.join(media_base, results_dir)
     app.config['SAVE_FOLDER'] = os.path.join(media_base, save_dir)
-    app.config['TEMP_FOLDER'] = os.path.join(media_base, temp_dir)
-    app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
 
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['RESULT_FOLDER'], exist_ok=True)
     os.makedirs(app.config['SAVE_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
 
     # 블루프린트 등록
-    from .routes.main import main_bp
-    from .routes.auth import auth_bp
-    from .routes.video import video_bp
-    from .routes.images import image_bp
-    from .routes.media import media_bp
+    from .routes.main       import main_bp
+    from .routes.auth       import auth_bp
+    from .routes.travel     import travel_bp
+    from .routes.photo      import photo_bp
+    from .routes.user_stats import user_stats_bp
+    from .routes.media      import media_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(video_bp)
-    app.register_blueprint(image_bp)
+    app.register_blueprint(travel_bp)
+    app.register_blueprint(photo_bp)
+    app.register_blueprint(user_stats_bp)
     app.register_blueprint(media_bp)
 
     return app
