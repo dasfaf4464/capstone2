@@ -1,14 +1,15 @@
 import os
 from flask import Flask
 from flask_cors import CORS
-# DB 매니저 불러오기
-from .storage.core.pg import init_pg 
+from .storage.core.pg import init_pg
 
-temp_store = {}
 
+# Flask 앱 생성, DB 연결, Blueprint 6개 등록, 미디어 저장 폴더 초기화
 def create_app():
     app = Flask(__name__)
     CORS(app)
+
+    app.secret_key = "yolo_team_super_secret_key"
 
     init_pg(app)
 

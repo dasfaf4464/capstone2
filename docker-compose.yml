@@ -15,8 +15,6 @@ services:
     depends_on:
       postgresql:
         condition: service_healthy
-      neo4j:
-        condition: service_healthy
     secrets:
       - source: gcp_key
         target: gcp-key.json

@@ -1,78 +1,76 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>회원가입 - YOLO 팀</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToT - 회원가입</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4ff; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  .card { background: white; padding: 40px; border-radius: 16px; width: 340px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  h1 { font-size: 30px; font-weight: 800; color: #4f8ef7; margin-bottom: 4px; }
+  .sub { color: #aaa; font-size: 13px; margin-bottom: 32px; }
+  label { display: block; font-size: 13px; color: #555; margin-bottom: 6px; margin-top: 16px; }
+  input { width: 100%; padding: 12px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border 0.2s; }
+  input:focus { border-color: #4f8ef7; }
+  .btn { width: 100%; padding: 13px; background: #4f8ef7; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 24px; transition: background 0.2s; }
+  .btn:hover { background: #3a7ae0; }
+  .link { text-align: center; margin-top: 16px; font-size: 13px; color: #888; }
+  .link a { color: #4f8ef7; text-decoration: none; font-weight: 600; }
+  .msg { font-size: 13px; margin-top: 10px; text-align: center; display: none; }
+  .msg.error { color: #e55; }
+  .msg.success { color: #2a9d5c; }
+</style>
 </head>
 <body>
-    <div>
-        <h1>프로그램 로고</h1>
-    </div>
+<div class="card">
+  <h1>ToT ✈️</h1>
+  <p class="sub">회원가입</p>
 
-    <hr>
+  <label>아이디</label>
+  <input type="text" id="user_id" placeholder="아이디 입력 (4~20자)">
 
-    <div>
-        <h2>회원가입</h2>
-        <form id="signupForm">
-            <div>
-                <label>닉네임</label><br>
-                <input type="text" id="nickname" name="nickname" placeholder="닉네임을 입력하세요" required>
-                <button type="button" onclick="checkNickname()">중복검사</button>
-            </div>
-            <br>
-            <div>
-                <label>이메일</label><br>
-                <input type="email" id="email" name="email" placeholder="이메일을 입력하세요" required>
-            </div>
-            <br>
-            <div>
-                <label>비밀번호</label><br>
-                <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
-            </div>
-            <br>
-            <button type="submit">회원가입</button>
-            <button type="button">Google로 회원가입</button>
-        </form>
-        <br>
-        <a href="login.html">계정이 이미 있으신가요? 로그인하기</a>
-    </div>
+  <label>비밀번호</label>
+  <input type="password" id="user_pw" placeholder="비밀번호 입력">
 
-    <script>
-        document.getElementById('signupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+  <p class="msg" id="msg"></p>
+  <button class="btn" onclick="signup()">회원가입</button>
+  <p class="link">이미 계정이 있으신가요? <a href="/">로그인</a></p>
+</div>
 
-            const nickname = document.getElementById('nickname').value;
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+<script>
+async function signup() {
+  const user_id = document.getElementById('user_id').value.trim();
+  const user_pw = document.getElementById('user_pw').value.trim();
+  const msgEl   = document.getElementById('msg');
 
-            try {
-                const response = await fetch('http://localhost:5000/api/auth/signup', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ nickname, email, password })
-                });
+  if (!user_id || !user_pw) {
+    showMsg('아이디와 비밀번호를 입력해주세요.', 'error');
+    return;
+  }
 
-                const result = await response.json();
+  const res = await fetch('/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: user_id, pw: user_pw })
+  });
+  const data = await res.json();
 
-                if (response.ok) {
-                    alert('회원가입 성공!');
-                    location.href = 'login.html';
-                } else {
-                    alert('회원가입 실패: ' + (result.message || '알 수 없는 오류'));
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('서버 연결에 실패했습니다.');
-            }
-        });
+  if (data.result === 'success') {
+    showMsg('회원가입 완료! 로그인 페이지로 이동합니다.', 'success');
+    setTimeout(() => location.href = '/', 1500);
+  } else {
+    showMsg(data.msg || '회원가입 실패', 'error');
+  }
+}
 
-        async function checkNickname() {
-            const nickname = document.getElementById('nickname').value;
-            if(!nickname) return alert('닉네임을 입력해주세요.');
-            alert('중복 검사 기능은 API 명세에 따라 추가 구현이 필요합니다.');
-        }
-    </script>
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Enter') signup(); });
+</script>
 </body>
 </html>

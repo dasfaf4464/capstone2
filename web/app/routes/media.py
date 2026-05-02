@@ -1,13 +1,11 @@
 """
-미디어 파일 서빙 라우트.
+[ media 라우터 ]
+사진 파일을 브라우저에 서빙하는 라우터
 
-GET /media/images/<filename>   — 영구 이미지
-GET /media/frames/<filename>   — 파이프라인 top5 프레임 (임시)
-GET /media/temp/<temp_id>      — confirm 전 임시 이미지 미리보기
+- GET /media/images/<filename>  → 사진 파일 서빙 (SAVE_FOLDER)
 """
 
-from flask import Blueprint, send_from_directory, jsonify, current_app
-from .. import temp_store
+from flask import Blueprint, send_from_directory, current_app
 
 media_bp = Blueprint('media', __name__, url_prefix='/media')
 
