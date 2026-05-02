@@ -4,6 +4,7 @@ from flask_cors import CORS
 from .storage.core.pg import init_pg
 
 
+# Flask 앱 생성, DB 연결, Blueprint 6개 등록, 미디어 저장 폴더 초기화
 def create_app():
     app = Flask(__name__)
     CORS(app)

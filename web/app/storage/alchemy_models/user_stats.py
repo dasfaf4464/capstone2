@@ -28,32 +28,54 @@ class UserStats(db.Model):
     updated_at       = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+def clear_user_stats(user_uuid):
+    # 사진이 모두 삭제된 경우 통계·LLM 결과를 전부 NULL로 초기화
+    try:
+        stats = UserStats.query.filter_by(user_uuid=user_uuid).first()
+        if stats:
+            stats.category_stats   = None
+            stats.keyword_stats    = None
+            stats.personality_type = None
+            stats.recommendation   = None
+            db.session.commit()  # onupdate=func.now() 가 자동으로 updated_at 갱신
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+
 def get_user_stats(user_uuid):
-    """유저 통계 조회"""
+    # 유저 통계 단건 조회 (category_stats, keyword_stats, personality_type, recommendation 포함)
     return UserStats.query.filter_by(user_uuid=user_uuid).first()
 
 
 def upsert_user_stats(user_uuid, category_stats, keyword_stats, personality_type, recommendation):
-    """유저 통계 저장 또는 갱신"""
+    # PostgreSQL 네이티브 UPSERT — 동시 다중 업로드 시 race condition 방지
+    # ::jsonb 캐스트 대신 CAST() 사용 — SQLAlchemy text() 파서가 :: 를 파라미터로 오인하는 버그 회피
+    import json as _json
+    from sqlalchemy import text
     try:
-        stats = UserStats.query.filter_by(user_uuid=user_uuid).first()
-        if stats:
-            stats.category_stats   = category_stats
-            stats.keyword_stats    = keyword_stats
-            stats.personality_type = personality_type
-            stats.recommendation   = recommendation
-            stats.updated_at       = func.now()
-        else:
-            stats = UserStats(
-                user_uuid=user_uuid,
-                category_stats=category_stats,
-                keyword_stats=keyword_stats,
-                personality_type=personality_type,
-                recommendation=recommendation,
-            )
-            db.session.add(stats)
+        db.session.execute(text("""
+            INSERT INTO user_stats
+                (user_uuid, category_stats, keyword_stats, personality_type, recommendation)
+            VALUES
+                (:user_uuid,
+                 CAST(:category_stats AS jsonb),
+                 CAST(:keyword_stats  AS jsonb),
+                 :personality_type,
+                 :recommendation)
+            ON CONFLICT (user_uuid) DO UPDATE SET
+                category_stats   = EXCLUDED.category_stats,
+                keyword_stats    = EXCLUDED.keyword_stats,
+                personality_type = EXCLUDED.personality_type,
+                recommendation   = EXCLUDED.recommendation
+        """), {
+            'user_uuid':        str(user_uuid),
+            'category_stats':   _json.dumps(category_stats,  ensure_ascii=False),
+            'keyword_stats':    _json.dumps(keyword_stats,   ensure_ascii=False),
+            'personality_type': personality_type,
+            'recommendation':   recommendation,
+        })
         db.session.commit()
-        return stats
     except Exception as e:
         db.session.rollback()
         raise e

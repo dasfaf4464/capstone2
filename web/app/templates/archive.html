@@ -5,6 +5,57 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ToT - 아카이브</title>
 <link rel="stylesheet" href="/static/common.css">
+<style>
+  /* 카드를 relative로 감싸고 삭제 버튼 배치 */
+  .travel-card-wrap { position: relative; }
+
+  .travel-card-wrap .travel-card {
+    /* 오른쪽에 삭제 버튼 공간 확보 */
+    padding-right: 48px;
+  }
+
+  .btn-delete-travel {
+    position: absolute; right: 14px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    font-size: 18px; cursor: pointer;
+    color: #ccc; padding: 6px;
+    border-radius: 50%;
+    transition: color 0.15s, background 0.15s;
+    line-height: 1;
+  }
+  .btn-delete-travel:hover {
+    color: #e55; background: #fff0f0;
+  }
+
+  /* 확인 모달 */
+  .confirm-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55); z-index: 300;
+    justify-content: center; align-items: center;
+    padding: 24px;
+  }
+  .confirm-overlay.show { display: flex; }
+
+  .confirm-box {
+    background: white; border-radius: 16px;
+    padding: 24px 20px; width: 100%; max-width: 320px;
+    text-align: center; animation: fadeScale 0.15s ease;
+  }
+  @keyframes fadeScale {
+    from { transform: scale(0.93); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+  .confirm-box .icon { font-size: 36px; margin-bottom: 10px; }
+  .confirm-box .title { font-size: 16px; font-weight: 700; color: #222; margin-bottom: 6px; }
+  .confirm-box .desc  { font-size: 13px; color: #888; margin-bottom: 20px; line-height: 1.5; }
+
+  .confirm-btns { display: flex; gap: 10px; }
+  .confirm-btns button { flex: 1; padding: 11px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-cancel  { background: #f0f0f0; color: #555; }
+  .btn-confirm { background: #e55; color: white; }
+  .btn-confirm:disabled { background: #ccc; cursor: not-allowed; }
+</style>
 </head>
 <body>
 
@@ -14,6 +65,19 @@
 
 <div class="content">
   <div id="travel_list"></div>
+</div>
+
+<!-- 삭제 확인 모달 -->
+<div class="confirm-overlay" id="confirm_overlay">
+  <div class="confirm-box">
+    <div class="icon">🗑️</div>
+    <div class="title" id="confirm_title">여행을 삭제할까요?</div>
+    <div class="desc" id="confirm_desc">삭제하면 이 여행의 사진과 태그가<br>모두 영구적으로 삭제됩니다.</div>
+    <div class="confirm-btns">
+      <button class="btn-cancel"  onclick="closeConfirm()">취소</button>
+      <button class="btn-confirm" id="btn_confirm_ok" onclick="confirmDelete()">삭제</button>
+    </div>
+  </div>
 </div>
 
 <nav class="bottom-nav">
@@ -33,29 +97,98 @@
 </nav>
 
 <script>
+let pendingDeleteUuid = null;
+
 async function loadTravels() {
   const res  = await fetch('/api/travel/list');
   const data = await res.json();
   const el   = document.getElementById('travel_list');
 
   if (!data.travels || data.travels.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="icon">✈️</div><p>아직 여행이 없습니다.<br>사진을 업로드해서 첫 여행을 기록해보세요!</p></div>`;
+    el.innerHTML = `<div class="empty">
+      <div class="icon">✈️</div>
+      <p>아직 여행이 없습니다.<br>사진을 업로드해서 첫 여행을 기록해보세요!</p>
+    </div>`;
     return;
   }
 
   el.innerHTML = data.travels.map(t => `
-    <a href="/travel/${t.travel_uuid}" class="travel-card">
-      <img class="travel-thumb"
-           src="${t.cover_photo_path ? '/media/images/' + t.cover_photo_path.split('/').pop() : ''}"
-           onerror="this.style.background='#e8eaf6'"
-           alt="">
-      <div class="travel-info">
-        <div class="name">${t.travel_name}</div>
-        <div class="date">${t.start_date} ~ ${t.end_date}</div>
-      </div>
-    </a>
+    <div class="travel-card-wrap" id="wrap_${t.travel_uuid}">
+      <a href="/travel/${t.travel_uuid}" class="travel-card">
+        <img class="travel-thumb"
+             src="${t.cover_photo_path ? '/media/images/' + t.cover_photo_path.split('/').pop() : ''}"
+             onerror="this.style.background='#e8eaf6'"
+             alt="">
+        <div class="travel-info">
+          <div class="name">${t.travel_name}</div>
+          <div class="date">${t.start_date} ~ ${t.end_date}</div>
+        </div>
+      </a>
+      <button class="btn-delete-travel"
+              onclick="askDelete('${t.travel_uuid}', '${t.travel_name.replace(/'/g, "\\'")}', event)"
+              title="여행 삭제">🗑️</button>
+    </div>
   `).join('');
 }
+
+/* ── 삭제 확인 모달 열기 ── */
+function askDelete(uuid, name, event) {
+  event.preventDefault();   // 카드 링크 이동 방지
+  event.stopPropagation();
+
+  pendingDeleteUuid = uuid;
+  document.getElementById('confirm_title').textContent = `"${name}" 삭제`;
+  document.getElementById('btn_confirm_ok').disabled = false;
+  document.getElementById('btn_confirm_ok').textContent = '삭제';
+  document.getElementById('confirm_overlay').classList.add('show');
+}
+
+function closeConfirm() {
+  pendingDeleteUuid = null;
+  document.getElementById('confirm_overlay').classList.remove('show');
+}
+
+/* ── 삭제 실행 ── */
+async function confirmDelete() {
+  if (!pendingDeleteUuid) return;
+
+  const btn = document.getElementById('btn_confirm_ok');
+  btn.disabled    = true;
+  btn.textContent = '삭제 중…';
+
+  try {
+    const res  = await fetch(`/api/travel/${pendingDeleteUuid}`, { method: 'DELETE' });
+    const data = await res.json();
+
+    if (data.result === 'success') {
+      // 카드 즉시 제거
+      const wrap = document.getElementById(`wrap_${pendingDeleteUuid}`);
+      if (wrap) wrap.remove();
+
+      // 목록이 비었으면 빈 상태 표시
+      const list = document.getElementById('travel_list');
+      if (list.children.length === 0) {
+        list.innerHTML = `<div class="empty">
+          <div class="icon">✈️</div>
+          <p>아직 여행이 없습니다.<br>사진을 업로드해서 첫 여행을 기록해보세요!</p>
+        </div>`;
+      }
+
+      closeConfirm();
+    } else {
+      alert(data.msg || '삭제 실패');
+      btn.disabled    = false;
+      btn.textContent = '삭제';
+    }
+  } catch (e) {
+    alert('네트워크 오류가 발생했습니다.');
+    btn.disabled    = false;
+    btn.textContent = '삭제';
+  }
+}
+
+/* ESC 키로 모달 닫기 */
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfirm(); });
 
 loadTravels();
 </script>

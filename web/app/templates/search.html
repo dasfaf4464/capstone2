@@ -8,8 +8,67 @@
 <style>
   .search-bar { display: flex; gap: 8px; margin-bottom: 20px; }
   .search-bar input { flex: 1; }
-  .search-bar button { flex-shrink: 0; padding: 12px 18px; background: #4f8ef7; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .search-bar button {
+    flex-shrink: 0; padding: 12px 18px;
+    background: #4f8ef7; color: white;
+    border: none; border-radius: 10px;
+    font-size: 15px; cursor: pointer;
+  }
   .result-count { font-size: 13px; color: #888; margin-bottom: 12px; }
+
+  /* ── 사진 모달 (중앙, travel_detail과 동일 스타일) ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78); z-index: 200;
+    justify-content: center; align-items: center;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal-sheet {
+    background: white; border-radius: 16px;
+    width: 100%; max-width: 400px; max-height: 88vh;
+    overflow-y: auto;
+    animation: fadeScale 0.18s ease;
+  }
+  @keyframes fadeScale {
+    from { transform: scale(0.94); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .modal-img-wrap {
+    position: relative; width: 100%;
+    background: #111; border-radius: 16px 16px 0 0; overflow: hidden;
+  }
+  .modal-img-wrap img {
+    width: 100%; max-height: 55vh; object-fit: contain; display: block;
+  }
+  .modal-close-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(0,0,0,0.45); color: white;
+    border: none; border-radius: 50%; width: 30px; height: 30px;
+    font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .modal-body { padding: 14px 16px 20px; }
+
+  .modal-travel {
+    font-size: 12px; color: #aaa; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .modal-cat-badge {
+    display: inline-block;
+    background: #e8f0ff; color: #4f8ef7;
+    font-size: 12px; font-weight: 700;
+    padding: 3px 11px; border-radius: 20px; margin-bottom: 7px;
+  }
+  .modal-meta {
+    font-size: 12px; color: #888;
+    display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .modal-tags-label { font-size: 11px; color: #aaa; margin-bottom: 6px; }
+  .modal-tags-empty { font-size: 13px; color: #bbb; }
 </style>
 </head>
 <body>
@@ -20,7 +79,8 @@
 
 <div class="content">
   <div class="search-bar">
-    <input class="input-field" type="text" id="keyword" placeholder="키워드 입력 (예: 바다, 라멘)">
+    <input class="input-field" type="text" id="keyword"
+           placeholder="키워드 입력 (예: 바, 하이킹)">
     <button onclick="search()">검색</button>
   </div>
 
@@ -28,13 +88,20 @@
   <div class="photo-grid" id="result_grid"></div>
 </div>
 
-<!-- 사진 상세 모달 -->
-<div class="modal" id="modal" onclick="closeModal()">
-  <span class="modal-close">✕</span>
-  <img id="modal_img" src="" alt="">
-  <div class="modal-tags" style="margin-top:16px;text-align:center">
-    <div style="color:#7ecfff;font-size:14px;font-weight:700" id="modal_cat"></div>
-    <div style="margin-top:8px" id="modal_keywords"></div>
+<!-- ── 사진 상세 모달 (중앙) ── -->
+<div class="modal-overlay" id="modal_overlay" onclick="handleOverlayClick(event)">
+  <div class="modal-sheet">
+    <div class="modal-img-wrap">
+      <img id="modal_img" src="" alt="">
+      <button class="modal-close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-travel">✈️ <span id="modal_travel"></span></div>
+      <div class="modal-cat-badge" id="modal_cat"></div>
+      <div class="modal-meta" id="modal_meta"></div>
+      <div class="modal-tags-label">태그</div>
+      <div id="modal_keywords"></div>
+    </div>
   </div>
 </div>
 
@@ -55,39 +122,83 @@
 </nav>
 
 <script>
+let displayedPhotos = [];
+
 async function search() {
   const keyword = document.getElementById('keyword').value.trim();
   if (!keyword) return;
 
-  const res  = await fetch(`/api/photo/search?keyword=${encodeURIComponent(keyword)}`);
-  const data = await res.json();
+  const res    = await fetch(`/api/photo/search?keyword=${encodeURIComponent(keyword)}`);
+  const data   = await res.json();
   const photos = data.photos || [];
+  displayedPhotos = photos;
 
-  document.getElementById('result_count').style.display = 'block';
-  document.getElementById('result_count').textContent = `"${keyword}" 검색 결과 ${photos.length}장`;
+  const countEl = document.getElementById('result_count');
+  countEl.style.display = 'block';
+  countEl.textContent   = `"${keyword}" 검색 결과 ${photos.length}장`;
 
   const grid = document.getElementById('result_grid');
   if (photos.length === 0) {
-    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">🔍</div><p>검색 결과가 없습니다.</p></div>`;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <div class="icon">🔍</div><p>검색 결과가 없습니다.</p></div>`;
     return;
   }
-  grid.innerHTML = photos.map(p => `
-    <div class="photo-cell" onclick="openModal('${p.photo_path}', '${p.main_category || ''}', ${JSON.stringify(p.sub_categories || [])})">
-      <img src="/media/images/${p.photo_path.split('/').pop()}" alt="">
+
+  grid.innerHTML = photos.map((p, i) => `
+    <div class="photo-cell" onclick="openModal(${i})">
+      <img src="/media/images/${p.photo_path.split('/').pop()}"
+           alt="" onerror="this.style.display='none'">
       ${p.main_category ? `<div class="badge">${p.main_category}</div>` : ''}
     </div>
   `).join('');
 }
 
-function openModal(path, category, tags) {
-  document.getElementById('modal_img').src = '/media/images/' + path.split('/').pop();
-  document.getElementById('modal_cat').textContent = category;
-  document.getElementById('modal_keywords').innerHTML = tags.map(t => `<span class="tag">#${t}</span>`).join('');
-  document.getElementById('modal').classList.add('show');
-}
-function closeModal() { document.getElementById('modal').classList.remove('show'); }
+function openModal(idx) {
+  const p = displayedPhotos[idx];
 
-document.getElementById('keyword').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+  document.getElementById('modal_img').src =
+    '/media/images/' + p.photo_path.split('/').pop();
+
+  // 여행명 + 기간
+  let travelLabel = p.travel_name || '';
+  if (p.travel_start && p.travel_end) {
+    travelLabel += ' · ' + p.travel_start + ' ~ ' + p.travel_end;
+  }
+  document.getElementById('modal_travel').textContent = travelLabel;
+
+  // 카테고리
+  document.getElementById('modal_cat').textContent = p.main_category || '미분류';
+
+  // 인물·활동 메타
+  const meta = [];
+  if (p.has_person) meta.push('<span>👤 인물 포함</span>');
+  if (p.activity)   meta.push(`<span>🏃 ${p.activity}</span>`);
+  document.getElementById('modal_meta').innerHTML = meta.join('');
+
+  // 태그
+  const kwEl = document.getElementById('modal_keywords');
+  if (p.sub_categories && p.sub_categories.length > 0) {
+    kwEl.innerHTML = p.sub_categories.map(t => `<span class="tag">#${t}</span>`).join('');
+  } else {
+    kwEl.innerHTML = '<span class="modal-tags-empty">태그 없음</span>';
+  }
+
+  document.getElementById('modal_overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modal_overlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal_overlay')) closeModal();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.getElementById('keyword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') search();
+});
 </script>
 </body>
 </html>

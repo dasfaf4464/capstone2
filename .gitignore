@@ -695,4 +695,4 @@ neo4j/import
 # 구글 보안키 절대 수정 금지
 gcp-key.json
 
-.claude/worktrees/
+.claude/

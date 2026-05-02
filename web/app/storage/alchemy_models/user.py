@@ -12,7 +12,7 @@ class User(db.Model):
 
 
 def signup(user_id: str, user_pw: str) -> "User | None":
-    # 회원가입
+    # 유저 생성 후 DB 저장, 중복 ID면 rollback 후 None 반환
     try:
         user = User(user_id=user_id, user_pw=user_pw)
         db.session.add(user)
@@ -25,7 +25,7 @@ def signup(user_id: str, user_pw: str) -> "User | None":
 
 
 def login(user_id: str, user_pw: str) -> "User | None":
-    # 로그인 검증, 성공 시 User 반환 실패 시 None
+    # user_id로 유저 조회 후 pw 일치 확인, 성공 시 User 객체 반환 실패 시 None
     user = User.query.filter_by(user_id=user_id).first()
     if not user or user.user_pw != user_pw:
         return None
@@ -36,5 +36,5 @@ def login(user_id: str, user_pw: str) -> "User | None":
 
 
 def get_user(user_uuid) -> "User | None":
-    # 사용자 확인, user_uuid로 조회
+    # user_uuid로 유저 단건 조회
     return User.query.get(user_uuid)

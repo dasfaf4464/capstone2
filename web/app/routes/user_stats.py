@@ -8,12 +8,14 @@
 
 from flask import Blueprint, jsonify, session
 from ..storage.alchemy_models.user_stats import get_user_stats
+from ..storage.alchemy_models.photos import get_user_person_stats, get_user_activity_stats
 
 user_stats_bp = Blueprint('user_stats', __name__, url_prefix='/api/user')
 
 
 @user_stats_bp.route('/stats', methods=['GET'])
 def get_stats():
+    # 유저의 카테고리 비율 통계 + 키워드 Top10 반환
     # 로그인 확인
     user_uuid = session.get('user_uuid')
     if not user_uuid:
@@ -22,18 +24,24 @@ def get_stats():
     try:
         stats = get_user_stats(user_uuid)
 
+        person_stats   = get_user_person_stats(user_uuid)
+        activity_stats = get_user_activity_stats(user_uuid)
+
         if not stats:
-            # 아직 업로드한 사진 없음
             return jsonify({
                 'result':         'success',
                 'category_stats': {},
                 'keyword_stats':  [],
+                'person_stats':   person_stats,
+                'activity_stats': activity_stats,
             }), 200
 
         return jsonify({
             'result':         'success',
             'category_stats': stats.category_stats or {},
             'keyword_stats':  stats.keyword_stats  or [],
+            'person_stats':   person_stats,
+            'activity_stats': activity_stats,
         }), 200
 
     except Exception as e:
@@ -42,6 +50,7 @@ def get_stats():
 
 @user_stats_bp.route('/recommendation', methods=['GET'])
 def get_recommendation():
+    # LLM이 생성한 성향 문구 + 여행지 추천 반환, 사진 없으면 기본 안내 메시지 반환
     # 로그인 확인
     user_uuid = session.get('user_uuid')
     if not user_uuid:

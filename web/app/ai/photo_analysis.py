@@ -10,13 +10,16 @@ Gemini를 이용한 사진 AI 분석 모듈
 import os
 import json
 import threading
-import uuid
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 import google.generativeai as genai
 
 # Gemini 초기화
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-_model = genai.GenerativeModel(os.getenv('GEMINI_MODEL', 'gemini-1.5-flash'))
+_model = genai.GenerativeModel(os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview'))
+
+# 동시 실행 최대 5개 제한 (Gemini Rate Limit + 서버 과부하 방지)
+_executor  = ThreadPoolExecutor(max_workers=5)
 
 # 백그라운드 job 상태 저장 (메모리)
 # { photo_uuid: { status: pending/done/fail, result: {...} } }
@@ -29,6 +32,7 @@ _jobs_lock  = threading.Lock()
 # ─────────────────────────────────────────────
 
 def analyze_photo(photo_path: str) -> dict:
+    # 사진 1장을 Gemini VLM에 전달해 main_category·sub_categories·has_person·activity 추출
     """
     사진 1장을 Gemini에 전달해서 분석 결과 반환
     반환: { main_category, sub_categories, has_person, activity }
@@ -54,9 +58,11 @@ def analyze_photo(photo_path: str) -> dict:
   · 음식 예시: 라멘, 스시, 아이스크림, 디저트, 카페, 길거리음식
   · 기록 예시: 동상, 전시품, 쇼핑상품, 기념품, 간판
 
-- has_person: 사진에 사람이 1명 이상 있으면 true, 없으면 false
+- has_person: 사람이 사진의 주요 피사체인 경우에만 true
+  · true 조건: 셀카, 인물 사진, 사람이 화면의 30% 이상을 차지하는 경우, 사람이 명확히 사진의 주인공인 경우
+  · false 조건: 사람이 배경에 작게 찍힌 경우, 군중 속 지나가는 행인, 멀리서 점처럼 보이는 경우, 풍경 사진에 사람이 일부 포함된 경우
 
-- activity: 사람이 활동 중이면 활동명 (예: "하이킹", "수상스포츠", "사이클링"), 없으면 null
+- activity: has_person이 true이고 사람이 특정 활동 중이면 활동명 (예: "하이킹", "수상스포츠", "사이클링"), 없으면 null
 """
     try:
         image = Image.open(photo_path)
@@ -80,7 +86,9 @@ def analyze_photo(photo_path: str) -> dict:
 
         result['has_person'] = bool(result.get('has_person', False))
 
-        if result.get('activity') == 'null' or result.get('activity') == '':
+        # activity 비표준 문자열 정규화 ("없음", "-", "null", "" 등 → None)
+        act = result.get('activity')
+        if not act or str(act).strip().lower() in ('null', 'none', '없음', '해당없음', '-', 'n/a', 'na'):
             result['activity'] = None
 
         return result
@@ -100,17 +108,20 @@ def analyze_photo(photo_path: str) -> dict:
 # ─────────────────────────────────────────────
 
 def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
+    # 유저 통계를 Gemini LLM에 주입해 성향 문구(personality_type) + 여행지 추천(recommendation) 생성
+    # keyword_stats에는 sub_categories + 인물포함 + 활동명이 통합 집계되어 있음
     """
     유저 통계 기반으로 성향 문구 + 추천 글 생성
     반환: { personality_type, recommendation }
     """
-    top_keywords = [item['keyword'] for item in keyword_stats[:5]]
+    # 상위 7개 (인물포함·활동 태그도 포함된 통합 순위)
+    top_keywords = [f"{item['keyword']}({item['count']}장)" for item in keyword_stats[:7]]
 
     prompt = f"""
 아래는 유저의 여행 사진 통계야.
 
 주카테고리 비율: {json.dumps(category_stats, ensure_ascii=False)}
-자주 찍은 키워드 (상위 5개): {top_keywords}
+상위 태그 (빈도순, 인물·활동 포함): {top_keywords}
 
 이 데이터를 기반으로 아래 JSON 형식으로만 답해줘. 다른 텍스트는 절대 포함하지 마.
 
@@ -122,7 +133,9 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
 규칙:
 - personality_type은 '당신은 '으로 시작하는 20자 이내 문장
 - recommendation은 구체적인 여행지 1~2곳 추천 + 이유를 3~4줄로 작성
-- 통계에서 가장 많은 카테고리와 키워드를 반영해서 작성
+- 통계에서 가장 많은 카테고리와 태그를 반영해서 작성
+- 상위 태그에 '인물포함'이 있으면 인물 사진 찍기 좋은 명소·셀카 스팟을 추천에 포함할 것
+- 상위 태그에 활동명(하이킹, 수상스포츠 등)이 있으면 해당 활동을 즐길 수 있는 여행지를 추천에 포함할 것
 """
     try:
         response = _model.generate_content(prompt)
@@ -148,7 +161,7 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
 # ─────────────────────────────────────────────
 
 def run_photo_job(photo_uuid: str, photo_path: str, user_uuid: str, travel_uuid: str, app):
-    """백그라운드 스레드로 사진 분석 실행"""
+    # 백그라운드 Thread로 사진 분석 실행 (업로드 요청은 즉시 202 반환, 분석은 별도로 진행)
     with _jobs_lock:
         _photo_jobs[photo_uuid] = {'status': 'pending'}
 
@@ -161,6 +174,10 @@ def run_photo_job(photo_uuid: str, photo_path: str, user_uuid: str, travel_uuid:
 
                 # AI 분석
                 result = analyze_photo(photo_path)
+
+                # main_category가 None이면 분석 실패로 처리
+                if result.get('main_category') is None:
+                    raise ValueError('main_category가 None — AI 분석 결과 불완전')
 
                 # DB 저장
                 update_analysis_result(
@@ -183,26 +200,30 @@ def run_photo_job(photo_uuid: str, photo_path: str, user_uuid: str, travel_uuid:
 
             except Exception as e:
                 print(f"[photo_analysis] job 실패: {e}")
-                with app.app_context():
-                    from ..storage.alchemy_models.photos import update_analysis_fail
-                    update_analysis_fail(photo_uuid)
+                # app_context는 이미 활성화돼 있으므로 중첩 금지
+                from ..storage.alchemy_models.photos import update_analysis_fail
+                update_analysis_fail(photo_uuid)
                 with _jobs_lock:
                     _photo_jobs[photo_uuid] = {'status': 'fail'}
 
-    thread = threading.Thread(target=_execute, daemon=True)
-    thread.start()
+    _executor.submit(_execute)
 
 
 def _refresh_user_stats(user_uuid: str):
+    # 분석 완료 후 전체 통계 재집계 → LLM 추천 재생성 → user_stats upsert
     """유저 통계 + LLM 추천 갱신"""
     try:
         from ..storage.alchemy_models.photos import get_category_stats, get_keyword_stats
         from ..storage.alchemy_models.user_stats import upsert_user_stats
 
         category_stats = get_category_stats(user_uuid)
+        # keyword_stats는 sub_categories + 인물포함 + 활동명 통합 집계
         keyword_stats  = get_keyword_stats(user_uuid, limit=10)
 
         if not category_stats:
+            # 사진이 하나도 없으면 통계를 NULL로 초기화
+            from ..storage.alchemy_models.user_stats import clear_user_stats
+            clear_user_stats(user_uuid)
             return
 
         # LLM 추천 생성
@@ -220,6 +241,7 @@ def _refresh_user_stats(user_uuid: str):
 
 
 def get_photo_job_status(photo_uuid: str) -> dict:
+    # 메모리(_photo_jobs dict)에서 현재 분석 job 상태 반환 (pending/done/fail/not_found)
     """job 상태 조회"""
     with _jobs_lock:
         return _photo_jobs.get(photo_uuid, {'status': 'not_found'})

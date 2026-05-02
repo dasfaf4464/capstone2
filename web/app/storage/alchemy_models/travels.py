@@ -28,7 +28,7 @@ class Travel(db.Model):
 
 
 def create_travel(user_uuid, travel_name, start_date, end_date):
-    """여행 생성"""
+    # 새 여행 레코드 생성 후 DB 저장
     try:
         travel = Travel(
             user_uuid=user_uuid,
@@ -45,17 +45,31 @@ def create_travel(user_uuid, travel_name, start_date, end_date):
 
 
 def get_travels_by_user(user_uuid):
-    """유저의 여행 목록 전체 조회 (최신순)"""
+    # 유저의 모든 여행 조회 (최신순)
     return Travel.query.filter_by(user_uuid=user_uuid).order_by(Travel.created_at.desc()).all()
 
 
 def get_travel(travel_uuid):
-    """여행 단건 조회"""
+    # travel_uuid로 여행 단건 조회
     return Travel.query.filter_by(travel_uuid=travel_uuid).first()
 
 
+def delete_travel(travel_uuid):
+    # 여행 레코드 삭제 (photos는 CASCADE로 자동 삭제됨)
+    # 디스크 파일 삭제는 라우터에서 먼저 처리 후 호출할 것
+    try:
+        travel = Travel.query.filter_by(travel_uuid=travel_uuid).first()
+        if travel:
+            db.session.delete(travel)
+            db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+
 def update_cover_photo(travel_uuid, photo_path):
-    """대표 썸네일 업데이트"""
+    # 여행 대표 썸네일 경로 설정 (이미 설정돼 있으면 건너뜀)
     try:
         travel = Travel.query.filter_by(travel_uuid=travel_uuid).first()
         if travel and not travel.cover_photo_path:

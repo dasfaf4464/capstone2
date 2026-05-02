@@ -10,7 +10,6 @@
   .personality { font-size: 17px; font-weight: 700; color: #333; margin-bottom: 16px; text-align: center; }
   .keywords { margin-top: 14px; }
   .keywords .label { font-size: 13px; color: #888; margin-bottom: 8px; }
-  .recommendation-box { background: #f0f4ff; border-radius: 12px; padding: 16px; margin-top: 14px; font-size: 14px; color: #444; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -36,9 +35,6 @@
       <div id="keywords_wrap"></div>
     </div>
 
-    <div class="recommendation-box" id="recommendation">
-      여행 사진을 업로드하고 나만의 여행 성향을 확인해보세요!
-    </div>
   </div>
 
 </div>
@@ -74,7 +70,6 @@ async function loadStats() {
 
   // 성향 문구
   document.getElementById('personality_type').textContent = rec.personality_type || '';
-  document.getElementById('recommendation').textContent   = rec.recommendation   || '';
 
   // 도넛 차트
   const catStats = stats.category_stats || {};

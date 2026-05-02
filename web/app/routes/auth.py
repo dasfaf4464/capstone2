@@ -16,6 +16,7 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
+    # ID/PW 받아 유저 생성, 중복 ID면 400 반환
     # 요청 body 에서 id, pw 꺼냄
     data = request.json or {}
     user_id = data.get('id')
@@ -49,6 +50,7 @@ def signup():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    # ID/PW 검증 후 성공 시 session에 user_uuid 저장
     # 요청 body 에서 id, pw 꺼냄
     data = request.json or {}
     user_id = data.get('id')
@@ -80,6 +82,7 @@ def login():
 
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
+    # session에서 user_uuid 제거해 로그아웃 처리
     # 세션에서 user_uuid 제거하면 로그아웃 됨
     session.pop('user_uuid', None)
     return jsonify({"result": "success", "msg": "로그아웃 되었습니다."}), 200
