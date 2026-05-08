@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS user_stats (
     keyword_stats    JSONB,       -- [{"keyword":"바다","count":25}, ...] 상위 10개
 
     -- LLM 결과 (통계 갱신 시 재생성)
-    personality_type VARCHAR(100),-- "당신은 자연을 사랑하는 여행자입니다"
+    personality_type VARCHAR(100),-- "감성 풍경 수집가"
+    personality_desc TEXT,        -- 통계 기반 성향 상세 분석 (5~7줄)
     recommendation   TEXT,        -- "바다와 미식을 동시에 즐길 수 있는..."
 
     updated_at       TIMESTAMPTZ  DEFAULT now()

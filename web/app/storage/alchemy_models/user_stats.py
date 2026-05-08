@@ -22,8 +22,9 @@ class UserStats(db.Model):
     keyword_stats    = Column(JSONB, nullable=True)  # [{"keyword":"바다","count":25}, ...]
 
     # LLM 결과
-    personality_type = Column(String(100), nullable=True)  # "당신은 자연을 사랑하는 여행자입니다"
-    recommendation   = Column(Text, nullable=True)         # "바다와 미식을 즐기는..."
+    personality_type = Column(String(100), nullable=True)  # "감성 풍경 수집가"
+    personality_desc = Column(Text, nullable=True)         # 통계 기반 성향 상세 분석 (5~7줄)
+    recommendation   = Column(Text, nullable=True)         # 맞춤형 여행지 추천
 
     updated_at       = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -36,6 +37,7 @@ def clear_user_stats(user_uuid):
             stats.category_stats   = None
             stats.keyword_stats    = None
             stats.personality_type = None
+            stats.personality_desc = None
             stats.recommendation   = None
             db.session.commit()  # onupdate=func.now() 가 자동으로 updated_at 갱신
     except Exception as e:
@@ -48,7 +50,7 @@ def get_user_stats(user_uuid):
     return UserStats.query.filter_by(user_uuid=user_uuid).first()
 
 
-def upsert_user_stats(user_uuid, category_stats, keyword_stats, personality_type, recommendation):
+def upsert_user_stats(user_uuid, category_stats, keyword_stats, personality_type, personality_desc, recommendation):
     # PostgreSQL 네이티브 UPSERT — 동시 다중 업로드 시 race condition 방지
     # ::jsonb 캐스트 대신 CAST() 사용 — SQLAlchemy text() 파서가 :: 를 파라미터로 오인하는 버그 회피
     import json as _json
@@ -56,23 +58,26 @@ def upsert_user_stats(user_uuid, category_stats, keyword_stats, personality_type
     try:
         db.session.execute(text("""
             INSERT INTO user_stats
-                (user_uuid, category_stats, keyword_stats, personality_type, recommendation)
+                (user_uuid, category_stats, keyword_stats, personality_type, personality_desc, recommendation)
             VALUES
                 (:user_uuid,
                  CAST(:category_stats AS jsonb),
                  CAST(:keyword_stats  AS jsonb),
                  :personality_type,
+                 :personality_desc,
                  :recommendation)
             ON CONFLICT (user_uuid) DO UPDATE SET
                 category_stats   = EXCLUDED.category_stats,
                 keyword_stats    = EXCLUDED.keyword_stats,
                 personality_type = EXCLUDED.personality_type,
+                personality_desc = EXCLUDED.personality_desc,
                 recommendation   = EXCLUDED.recommendation
         """), {
             'user_uuid':        str(user_uuid),
             'category_stats':   _json.dumps(category_stats,  ensure_ascii=False),
             'keyword_stats':    _json.dumps(keyword_stats,   ensure_ascii=False),
             'personality_type': personality_type,
+            'personality_desc': personality_desc,
             'recommendation':   recommendation,
         })
         db.session.commit()
