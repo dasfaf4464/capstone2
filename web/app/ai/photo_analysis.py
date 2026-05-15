@@ -65,7 +65,7 @@ def analyze_photo(photo_path: str) -> dict:
 
 - activity: has_person이 true이고 사람이 신체적 활동을 하고 있을 때만 활동명, 없으면 null
   · 포함 가능한 활동 예시: 하이킹, 등산, 수영, 수상스포츠, 서핑, 사이클링, 자전거, 스키, 스노보드, 암벽등반, 캠핑, 낚시, 골프, 테니스, 달리기, 요가
-  · 반드시 null로 처리할 것: 여행, 관광, 사진촬영, 식사, 쇼핑, 산책, 구경, 감상, 휴식 — 이런 일반적 행위는 활동으로 보지 않음
+  · 반드시 null로 처리할 것: 여행, 관광, 산책, 구경, 감상, 휴식 — 이런 일반적 행위는 활동으로 보지 않음
   · 사람이 단순히 서 있거나 앉아 있거나 포즈를 취하는 경우도 null
 """
     try:
@@ -98,7 +98,7 @@ def analyze_photo(photo_path: str) -> dict:
         act = result.get('activity')
         _invalid_activities = {
             'null', 'none', '없음', '해당없음', '-', 'n/a', 'na',
-            '여행', '관광', '사진촬영', '사진', '식사', '쇼핑', '산책',
+            '여행', '관광', '사진', '산책',
             '구경', '감상', '휴식', '관람', '탑승', '이동', '방문',
         }
         if not act or str(act).strip().lower() in _invalid_activities:
@@ -120,7 +120,7 @@ def analyze_photo(photo_path: str) -> dict:
 # LLM 추천 글 생성
 # ─────────────────────────────────────────────
 
-def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
+def generate_recommendation(category_stats: dict, keyword_stats: list, travel_series: list = None) -> dict:
     # 유저 통계를 Gemini LLM에 주입해 성향 문구(personality_type) + 여행지 추천(recommendation) 생성
     # keyword_stats에는 sub_categories + 인물포함 + 활동명이 통합 집계되어 있음
     """
@@ -138,12 +138,25 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
         cat_lines.append(f"{cat} {pct}%({cnt}장)")
     cat_summary = ', '.join(cat_lines)
 
+    # 여행별 시계열 문장화
+    series_lines = []
+    if travel_series and len(travel_series) > 1:
+        for i, t in enumerate(travel_series, 1):
+            total = sum(t['category_stats'].values())
+            cats = ', '.join(
+                f"{cat} {round(cnt/total*100)}%"
+                for cat, cnt in sorted(t['category_stats'].items(), key=lambda x: -x[1])
+            )
+            series_lines.append(f"{i}번째 여행({t['travel_name']}, {t['start_date'][:7]}): {cats}")
+    series_summary = '\n'.join(series_lines) if series_lines else None
+
     prompt = f"""
 아래는 유저의 여행 사진 통계야.
 
 전체 사진 수: {total_photos}장
 카테고리 비율: {cat_summary}
 상위 태그 (빈도순, 인물·활동 포함): {top_keywords}
+{f"여행별 카테고리 변화 (시계열):{chr(10)}{series_summary}" if series_summary else ""}
 
 이 데이터를 기반으로 아래 JSON 형식으로만 답해줘. 다른 텍스트는 절대 포함하지 마.
 
@@ -160,6 +173,7 @@ def generate_recommendation(category_stats: dict, keyword_stats: list) -> dict:
   · 상위 태그들이 의미하는 선호 장소·음식·활동
   · '인물포함' 태그 비율이 높으면 동행 여행·인물 사진 선호 언급, 낮으면 풍경·사물 중심 언급
   · 활동 태그(하이킹, 수상스포츠 등)가 있으면 액티비티 성향 분석
+  · 여행별 카테고리 변화(시계열)가 제공된 경우, 여행이 쌓이면서 나타나는 관심사 변화 추세 언급
   · 전반적인 여행 스타일 총평으로 마무리
 - recommendation은 personality_desc 분석을 바탕으로 구체적인 여행지 1~2곳 + 추천 이유를 3~4줄로 작성
 - 상위 태그에 '인물포함'이 있으면 인물 사진 찍기 좋은 명소·셀카 스팟을 추천에 포함할 것
@@ -242,12 +256,14 @@ def _refresh_user_stats(user_uuid: str):
     # 분석 완료 후 전체 통계 재집계 → LLM 추천 재생성 → user_stats upsert
     """유저 통계 + LLM 추천 갱신"""
     try:
-        from ..storage.alchemy_models.photos import get_category_stats, get_keyword_stats
+        from ..storage.alchemy_models.photos import get_category_stats, get_keyword_stats, get_user_travel_series
         from ..storage.alchemy_models.user_stats import upsert_user_stats
 
         category_stats = get_category_stats(user_uuid)
         # keyword_stats는 sub_categories + 인물포함 + 활동명 통합 집계
         keyword_stats  = get_keyword_stats(user_uuid, limit=10)
+        # 여행별 시계열 데이터
+        travel_series  = get_user_travel_series(user_uuid)
 
         if not category_stats:
             # 사진이 하나도 없으면 통계를 NULL로 초기화
@@ -256,7 +272,7 @@ def _refresh_user_stats(user_uuid: str):
             return
 
         # LLM 추천 생성
-        llm_result = generate_recommendation(category_stats, keyword_stats)
+        llm_result = generate_recommendation(category_stats, keyword_stats, travel_series)
 
         upsert_user_stats(
             user_uuid=user_uuid,
