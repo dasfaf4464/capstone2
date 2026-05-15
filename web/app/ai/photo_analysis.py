@@ -8,6 +8,7 @@ Gemini를 이용한 사진 AI 분석 모듈
 """
 
 import os
+import io
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +17,7 @@ import google.generativeai as genai
 
 # Gemini 초기화
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-_model = genai.GenerativeModel(os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview'))
+_model = genai.GenerativeModel(os.getenv('GEMINI_MODEL', 'gemini-3.1-flash-lite'))
 
 # 동시 실행 최대 5개 제한 (Gemini Rate Limit + 서버 과부하 방지)
 _executor  = ThreadPoolExecutor(max_workers=5)
@@ -69,6 +70,10 @@ def analyze_photo(photo_path: str) -> dict:
 """
     try:
         image = Image.open(photo_path)
+        buf = io.BytesIO()
+        image.convert('RGB').save(buf, format='JPEG')
+        buf.seek(0)
+        image = Image.open(buf)
         response = _model.generate_content([prompt, image])
         text = response.text.strip()
 
