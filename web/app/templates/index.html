@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ToT - 메인</title>
+<title>YoLo - 메인</title>
 <link rel="stylesheet" href="/static/common.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
@@ -15,7 +15,7 @@
 <body>
 
 <div class="top-bar">
-  <span class="title">ToT ✈️</span>
+  <span class="title">YoLo ✈️</span>
   <span style="font-size:13px;color:#aaa;cursor:pointer" onclick="logout()">로그아웃</span>
 </div>
 
@@ -57,7 +57,7 @@
 </nav>
 
 <script>
-const COLORS = ['#4f8ef7', '#ff9f43', '#54a0ff'];
+const CAT_COLORS = { '풍경/장소': '#4f8ef7', '음식': '#ff9f43', '기록': '#2ecc71' };
 let chart = null;
 
 async function loadStats() {
@@ -84,7 +84,7 @@ async function loadStats() {
       type: 'doughnut',
       data: {
         labels,
-        datasets: [{ data: values, backgroundColor: COLORS, borderWidth: 0 }]
+        datasets: [{ data: values, backgroundColor: labels.map(l => CAT_COLORS[l] || '#4f8ef7'), borderWidth: 0 }]
       },
       options: {
         cutout: '65%',
@@ -97,7 +97,7 @@ async function loadStats() {
     const legendEl = document.getElementById('legend');
     legendEl.innerHTML = labels.map((l, i) => `
       <div class="legend-item">
-        <div class="legend-dot" style="background:${COLORS[i]}"></div>
+        <div class="legend-dot" style="background:${CAT_COLORS[l] || '#4f8ef7'}"></div>
         <span>${l} ${total > 0 ? Math.round(values[i]/total*100) : 0}%</span>
       </div>
     `).join('');
