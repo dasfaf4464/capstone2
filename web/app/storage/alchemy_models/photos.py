@@ -276,6 +276,35 @@ def get_user_activity_stats(user_uuid):
     return [{'activity': row[0], 'count': int(row[1])} for row in result]
 
 
+def get_user_travel_series(user_uuid):
+    # 유저의 여행별 카테고리 통계를 시계열(start_date 오름차순)로 반환
+    # → [{"travel_name": "제주도", "start_date": "2024-03-01", "category_stats": {"풍경/장소": 10, "음식": 5}}, ...]
+    from sqlalchemy import text
+    from collections import OrderedDict
+    result = db.session.execute(
+        text("""
+            SELECT t.travel_name, t.start_date, p.main_category, COUNT(*) as cnt
+            FROM photos p
+            JOIN travels t ON p.travel_uuid = t.travel_uuid
+            WHERE p.user_uuid = :user_uuid
+              AND p.analysis_status = 'done'
+              AND p.main_category IS NOT NULL
+            GROUP BY t.travel_uuid, t.travel_name, t.start_date, p.main_category
+            ORDER BY t.start_date ASC
+        """),
+        {'user_uuid': str(user_uuid)}
+    ).fetchall()
+
+    series = OrderedDict()
+    for row in result:
+        key = (str(row[1]), row[0])
+        if key not in series:
+            series[key] = {'travel_name': row[0], 'start_date': str(row[1]), 'category_stats': {}}
+        series[key]['category_stats'][row[2]] = int(row[3])
+
+    return list(series.values())
+
+
 def get_keyword_stats(user_uuid, limit=10):
     # sub_categories + 인물포함(has_person) + 활동명(activity)을 통합 집계, 상위 N개 반환
     # → [{"keyword":"바다","count":25}, {"keyword":"인물포함","count":7}, {"keyword":"하이킹","count":5}, ...]

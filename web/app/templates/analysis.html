@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ToT - 성향 분석</title>
+<title>YoLo - 성향 분석</title>
 <link rel="stylesheet" href="/static/common.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
@@ -75,7 +75,22 @@
 </nav>
 
 <script>
-const BAR_COLORS = { '풍경/장소': '#4f8ef7', '음식': '#ff9f43', '기록': '#54a0ff' };
+const BAR_COLORS = { '풍경/장소': '#4f8ef7', '음식': '#ff9f43', '기록': '#2ecc71' };
+
+// 타이핑 효과: el에 text를 한 글자씩 출력, 완료 후 onDone 콜백
+function typeText(el, text, speed, onDone) {
+  el.textContent = '';
+  let i = 0;
+  function tick() {
+    if (i < text.length) {
+      el.textContent += text[i++];
+      setTimeout(tick, speed);
+    } else if (onDone) {
+      onDone();
+    }
+  }
+  tick();
+}
 
 async function loadAnalysis() {
   const [statsRes, recRes] = await Promise.all([
@@ -85,20 +100,7 @@ async function loadAnalysis() {
   const stats = await statsRes.json();
   const rec   = await recRes.json();
 
-  // 성향 배지 + 상세 분석
-  const badgeEl = document.getElementById('personality_badge');
-  if (rec.personality_type) {
-    badgeEl.innerHTML = `<div class="personality-badge">${rec.personality_type}</div>`;
-  }
-  // 성향 분석 카드 (별도 카드)
-  if (rec.personality_desc) {
-    const descBox  = document.getElementById('personality_desc_box');
-    const descCard = document.getElementById('personality_desc_card');
-    descBox.textContent = rec.personality_desc;
-    descCard.style.display = 'block';
-  }
-
-  // 주카테고리 막대 차트
+  // 주카테고리 막대 차트 (즉시 표시)
   const catStats = stats.category_stats || {};
   const total    = Object.values(catStats).reduce((a, b) => a + b, 0);
   const barsEl   = document.getElementById('category_bars');
@@ -114,7 +116,7 @@ async function loadAnalysis() {
       </div>`;
   }).join('');
 
-  // 키워드
+  // 키워드 (즉시 표시)
   const keywords = stats.keyword_stats || [];
   if (keywords.length > 0) {
     document.getElementById('keyword_list').innerHTML = keywords.map(k =>
@@ -122,9 +124,34 @@ async function loadAnalysis() {
     ).join('');
   }
 
-  // 추천 글
-  document.getElementById('recommendation').textContent =
-    rec.recommendation || '사진을 더 업로드하면 추천을 드릴 수 있어요!';
+  // 성향 배지 타이핑
+  const badgeEl = document.getElementById('personality_badge');
+  if (rec.personality_type) {
+    badgeEl.innerHTML = `<div class="personality-badge" id="badge_text"></div>`;
+    const badgeText = document.getElementById('badge_text');
+
+    typeText(badgeText, rec.personality_type, 60, () => {
+      // 배지 완료 후 → 성향 분석 본문 타이핑
+      if (rec.personality_desc) {
+        const descCard = document.getElementById('personality_desc_card');
+        const descBox  = document.getElementById('personality_desc_box');
+        descCard.style.display = 'block';
+        typeText(descBox, rec.personality_desc, 18, () => {
+          // 성향 분석 완료 후 → 추천 글 타이핑
+          const recEl = document.getElementById('recommendation');
+          const recText = rec.recommendation || '사진을 더 업로드하면 추천을 드릴 수 있어요!';
+          typeText(recEl, recText, 18, null);
+        });
+      } else {
+        const recEl = document.getElementById('recommendation');
+        const recText = rec.recommendation || '사진을 더 업로드하면 추천을 드릴 수 있어요!';
+        typeText(recEl, recText, 18, null);
+      }
+    });
+  } else {
+    document.getElementById('recommendation').textContent =
+      rec.recommendation || '사진을 더 업로드하면 추천을 드릴 수 있어요!';
+  }
 }
 
 loadAnalysis();
